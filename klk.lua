@@ -72,13 +72,13 @@ local CONFIG = {
     },
     Emotes = {
         ["None"] = nil,
-        ["Floss"] = "rbxassetid://591877735",
-        ["Snoop Dogg"] = "rbxassetid://282548714",
-        ["Godlike"] = "rbxassetid://3360689775",
-        ["Caramelldansen"] = "rbxassetid://3189777795",
-        ["Head Banging"] = "rbxassetid://3136932179",
-        ["Default Dance"] = "rbxassetid://3333331310",
-        ["Salute"] = "rbxassetid://3360689775"
+        ["Dance 1"] = "rbxassetid://507771019",
+        ["Dance 2"] = "rbxassetid://507771955",
+        ["Dance 3"] = "rbxassetid://507772104",
+        ["Wave / Hello"] = "rbxassetid://507770239",
+        ["Point"] = "rbxassetid://507770453",
+        ["Cheer"] = "rbxassetid://507770677",
+        ["Laugh"] = "rbxassetid://507770818"
     }
 }
 
