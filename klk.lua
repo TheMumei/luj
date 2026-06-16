@@ -1351,7 +1351,7 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
                 if u then u(o) end 
             end
             table.clear(dirtyObjects)
-        end)
+        end))
         
         Library:Notify({Title = "System", Content = "Anonymizer activated successfully!", Duration = 3})
 end)
