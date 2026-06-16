@@ -287,6 +287,64 @@ local function setSound(char, enabled)
     sound.Pitch = enabled and 1.2 or ClientState.Originals.Sound.Pitch
 end
 
+local function updateStormAtmosphere(enabled)
+    local Lighting = game:GetService("Lighting")
+    local TweenService = game:GetService("TweenService")
+
+    if enabled then
+        for p, _ in pairs({ClockTime=1, Brightness=1, Ambient=1, OutdoorAmbient=1, ShadowSoftness=1}) do 
+            if ClientState.Originals.Lighting[p] == nil then
+                ClientState.Originals.Lighting[p] = Lighting[p]
+            end
+        end
+        
+        for _, c in ipairs(Lighting:GetChildren()) do 
+            if c:IsA("Atmosphere") or c:IsA("ColorCorrectionEffect") then c:Destroy() end 
+        end
+        
+        local atmosphere = Instance.new("Atmosphere")
+        atmosphere.Name = "StormAtmosphere"
+        atmosphere.Density = 0.4
+        atmosphere.Offset = 0.25
+        atmosphere.Color = Color3.fromRGB(130, 140, 150)
+        atmosphere.Decay = Color3.fromRGB(80, 85, 90)
+        atmosphere.Glare = 0
+        atmosphere.Haze = 3
+        atmosphere.Parent = Lighting
+
+        local colorCorr = Instance.new("ColorCorrectionEffect")
+        colorCorr.Name = "StormColorCorr"
+        colorCorr.Saturation = -0.4
+        colorCorr.Contrast = 0.1
+        colorCorr.TintColor = Color3.fromRGB(170, 180, 190)
+        colorCorr.Brightness = -0.1
+        colorCorr.Parent = Lighting
+
+        TweenService:Create(Lighting, TweenInfo.new(3, Enum.EasingStyle.Sine), {
+            ClockTime = 17.5,
+            Brightness = 0.5,
+            Ambient = Color3.fromRGB(70, 75, 80),
+            OutdoorAmbient = Color3.fromRGB(60, 65, 70),
+            ShadowSoftness = 1
+        }):Play()
+    else
+        for _, c in ipairs(Lighting:GetChildren()) do 
+            if c.Name == "StormAtmosphere" or c.Name == "StormColorCorr" then c:Destroy() end 
+        end
+        
+        local restoreProps = {}
+        for p, _ in pairs({ClockTime=1, Brightness=1, Ambient=1, OutdoorAmbient=1, ShadowSoftness=1}) do
+            if ClientState.Originals.Lighting[p] ~= nil then
+                restoreProps[p] = ClientState.Originals.Lighting[p]
+            end
+        end
+        
+        if next(restoreProps) then
+            TweenService:Create(Lighting, TweenInfo.new(3, Enum.EasingStyle.Sine), restoreProps):Play()
+        end
+    end
+end
+
 local function updateSky(enabled)
     local RENDER_STEP_NAME = "OG_SpongeBobSky_Loop"
     if enabled then
@@ -704,7 +762,8 @@ local Groups = {
     Tools = Tabs.Useful:AddLeftGroupbox("Tools"),
     TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"),
     TitanVis = Tabs.Titan:AddRightGroupbox("Visuals 🎨"),
-    TitanUtil = Tabs.Titan:AddLeftGroupbox("Utility ⚙️")
+    TitanUtil = Tabs.Titan:AddLeftGroupbox("Utility ⚙️"),
+    TitanWeather = Tabs.Titan:AddRightGroupbox("Weather & Storm ⛈️")
 }
 
 -- Populate Elements
@@ -745,14 +804,27 @@ Library.ToggleKeybind = Library.Options.ToggleUIKeybind
 -- Environment Tab (Buttons)
 -- ==========================================
 
-Groups.TitanEnv:AddButton("Enable Rain & Fog", function()
-
+Groups.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false, Callback = function(enabled)
         local Lighting = game:GetService("Lighting")
         local RunService = game:GetService("RunService")
         local Workspace = game:GetService("Workspace")
 
         local RENDER_LOOP_NAME = "ExecutorRainLoop"
         local RAIN_PART_NAME = "MyExecutorRainPart"
+
+        if not enabled then
+            pcall(function() RunService:UnbindFromRenderStep(RENDER_LOOP_NAME) end)
+            local oldPart = Workspace:FindFirstChild(RAIN_PART_NAME)
+            if oldPart then oldPart:Destroy() end
+            
+            local TweenService = game:GetService("TweenService")
+            local fogTween = TweenService:Create(Lighting, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+                FogEnd = 100000,
+                FogColor = Color3.fromRGB(190, 190, 190)
+            })
+            fogTween:Play()
+            return
+        end
 
         pcall(function() RunService:UnbindFromRenderStep(RENDER_LOOP_NAME) end)
         local oldPart = Workspace:FindFirstChild(RAIN_PART_NAME)
@@ -775,8 +847,11 @@ Groups.TitanEnv:AddButton("Enable Rain & Fog", function()
             emitter.LightInfluence = 0
             emitter.Orientation = Enum.ParticleOrientation.FacingCameraWorldUp
             emitter.Size = NumberSequence.new(5)
-            emitter.Rate = 2000
-            emitter.Speed = NumberRange.new(100)
+            
+            local intensity = Library.Options.RainIntensitySlider and Library.Options.RainIntensitySlider.Value or 50
+            emitter.Rate = intensity * 40
+            emitter.Speed = NumberRange.new(50 + intensity)
+            
             emitter.Lifetime = NumberRange.new(1.2)
             emitter.Transparency = NumberSequence.new({
                 NumberSequenceKeypoint.new(0, 1),
@@ -802,12 +877,36 @@ Groups.TitanEnv:AddButton("Enable Rain & Fog", function()
             local TweenService = game:GetService("TweenService")
             local fogTween = TweenService:Create(Lighting, TweenInfo.new(2, Enum.EasingStyle.Sine), {
                 FogColor = Color3.fromRGB(155, 160, 165),
-                FogEnd = 700
+                FogEnd = 700 - (intensity * 4)
             })
             fogTween:Play()
             Library:Notify({Title = "System", Content = "Rain and Fog applied!", Duration = 3})
         end)
-end)
+end})
+
+Groups.TitanEnv:AddSlider("RainIntensitySlider", {
+    Text = "Rain & Storm Intensity",
+    Default = 50,
+    Min = 10,
+    Max = 100,
+    Rounding = 0,
+    Callback = function(Value)
+        local rainPart = game:GetService("Workspace"):FindFirstChild("MyExecutorRainPart")
+        if rainPart then
+            local emitter = rainPart:FindFirstChild("RainEmitter")
+            if emitter then
+                emitter.Rate = Value * 40
+                emitter.Speed = NumberRange.new(50 + Value)
+            end
+            local TweenService = game:GetService("TweenService")
+            TweenService:Create(game:GetService("Lighting"), TweenInfo.new(1, Enum.EasingStyle.Sine), {
+                FogEnd = 700 - (Value * 4)
+            }):Play()
+        end
+    end
+})
+
+Groups.TitanWeather:AddToggle("StormAtmosphereToggle", { Text = "Realistic Storm Atmosphere", Default = false, Callback = updateStormAtmosphere })
 
 Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
 
@@ -1367,6 +1466,7 @@ local function resetAllUI()
     stopEmote()
     Library.Toggles.SpongebobSoundToggle:SetValue(false)
     Library.Toggles.SpongebobSkyToggle:SetValue(false)
+    Library.Toggles.StormAtmosphereToggle:SetValue(false)
     Library.Toggles.RainbowMode:SetValue(false)
     resetColors()
 end
@@ -1374,6 +1474,7 @@ end
 Groups.Tools:AddButton("Reset All", function() fullReset(Player.Character); resetAllUI() end)
 Groups.Tools:AddButton("Unload Script", { Text = "Unload Script", DoubleClick = false, Risky = true, Func = function() 
     if Library.Toggles.SpongebobSkyToggle and Library.Toggles.SpongebobSkyToggle.Value then updateSky(false) end
+    if Library.Toggles.StormAtmosphereToggle and Library.Toggles.StormAtmosphereToggle.Value then updateStormAtmosphere(false) end
     if ClientState.Connections.Rainbow then ClientState.Connections.Rainbow:Disconnect() end
     for _, c in pairs(ClientState.Connections.Env or {}) do if c then c:Disconnect() end end
     for _, c in ipairs(ClientState.Connections.Anonymizer or {}) do if c then c:Disconnect() end end
