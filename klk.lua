@@ -429,11 +429,20 @@ local function fullReset(char)
             if c:IsA("Accessory") and c:FindFirstChild("DrRayScriptedAccessory") then c:Destroy() end 
         end
         
-        -- Restore Face
+        -- Restore Face and Headless
         local head = char:FindFirstChild("Head")
-        if head and ClientState.Originals.FaceTexture then
-             local face = head:FindFirstChild("face") or Instance.new("Decal", head)
-             face.Name = "face"; face.Texture = ClientState.Originals.FaceTexture
+        if head then
+            if ClientState.Originals.FaceTexture then
+                local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
+                if not face then face = Instance.new("Decal", head); face.Name = "face" end
+                face.Texture = ClientState.Originals.FaceTexture
+                face.Transparency = 0
+            end
+            if ClientState.Originals.Headless then
+                head.Transparency = ClientState.Originals.Headless.Transparency or 0
+                local sm = head:FindFirstChildOfClass("SpecialMesh")
+                if sm and ClientState.Originals.Headless.MeshScale then sm.Scale = ClientState.Originals.Headless.MeshScale end
+            end
         end
     end
     
@@ -446,19 +455,30 @@ allActions = {
     ["Headless"] = { category = "Body", type = "Function", action = function(c, e)
         local head = c and c:FindFirstChild("Head")
         if not head then return end
+        
+        if not ClientState.Originals.Headless then 
+            ClientState.Originals.Headless = { Transparency = head.Transparency, MeshScale = nil }
+            local sm = head:FindFirstChildOfClass("SpecialMesh")
+            if sm then ClientState.Originals.Headless.MeshScale = sm.Scale end
+        end
+
+        local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
         if e then
-            local face = head:FindFirstChild("face")
             if face then
                 if not ClientState.Originals.FaceTexture then ClientState.Originals.FaceTexture = face.Texture end
-                face:Destroy()
+                face.Transparency = 1
             end
-            local m = Instance.new("SpecialMesh", head)
-            m.MeshType = Enum.MeshType.FileMesh; m.MeshId = CONFIG.AssetIDs.HeadlessMesh; m.TextureId = CONFIG.AssetIDs.HeadlessTex
-            ClientState.Scripted.HeadlessMesh = m
+            head.Transparency = 1
+            local sm = head:FindFirstChildOfClass("SpecialMesh")
+            if sm then sm.Scale = Vector3.new(0, 0, 0) end
         else
-            safeDestroy(ClientState.Scripted.HeadlessMesh)
-            if ClientState.Originals.FaceTexture and not head:FindFirstChild("face") then
-                local f = Instance.new("Decal", head); f.Name = "face"; f.Texture = ClientState.Originals.FaceTexture
+            if face and ClientState.Originals.FaceTexture then
+                face.Transparency = 0
+            end
+            if ClientState.Originals.Headless then
+                head.Transparency = ClientState.Originals.Headless.Transparency or 0
+                local sm = head:FindFirstChildOfClass("SpecialMesh")
+                if sm and ClientState.Originals.Headless.MeshScale then sm.Scale = ClientState.Originals.Headless.MeshScale end
             end
         end
     end},
@@ -631,7 +651,6 @@ end
 -- // UI Construction \\ --
 local Tabs = {
     Appearance = Window:AddTab("Appearance", "shirt"),
-    Misc = Window:AddTab("Misc", "archive"),
     Useful = Window:AddTab("Useful", "wrench"),
     Titan = Window:AddTab("Titan Engine", "globe"),
     Settings = Window:AddTab("UI Settings", "settings")
@@ -646,8 +665,6 @@ local Groups = {
     Animation = Tabs.Appearance:AddLeftGroupbox("Animation"),
     Emotes = Tabs.Appearance:AddRightGroupbox("Custom Emotes & Dances"),
     Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
-    Sounds = Tabs.Misc:AddLeftGroupbox("Sounds"),
-    Visuals = Tabs.Misc:AddRightGroupbox("Visuals"),
     Tools = Tabs.Useful:AddLeftGroupbox("Tools"),
     TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"),
     TitanVis = Tabs.Titan:AddRightGroupbox("Visuals 🎨"),
@@ -1383,6 +1400,7 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
     task.spawn(function()
         local t = tick()
         while not Player:HasAppearanceLoaded() and tick() - t < 3 do task.wait(0.1) end
+        task.wait(0.6) -- Extra buffer for games that assign outfits via server scripts
         
         if Player.Character ~= c then return end
 
