@@ -1396,21 +1396,27 @@ end })
 
 -- // Initialization \\ --
 ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(c)
-    c:WaitForChild("Humanoid")
     task.spawn(function()
+        c:WaitForChild("Humanoid", 3)
         local t = tick()
-        while not Player:HasAppearanceLoaded() and tick() - t < 3 do task.wait(0.1) end
+        while tick() - t < 2 do
+            local success, loaded = pcall(function() return Player:HasAppearanceLoaded() end)
+            if success and loaded then break end
+            task.wait(0.1)
+        end
         
-        if Player.Character ~= c then return end
+        if not c.Parent then return end
 
         ClientState.Scripted = { Shirt=nil, Pants=nil, TShirt=nil, HeadlessMesh=nil, SkyObject=nil }
         ClientState.Originals.LimbColors = {}
         ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {} }
         ClientState.Originals.FaceTexture = nil
         ClientState.Originals.Sound = { Id = nil, Pitch = nil }
+        ClientState.Originals.Headless = nil
         
         captureColors(c, true)
-        syncCharacter(c)
+        local success, err = pcall(function() syncCharacter(c) end)
+        if not success then warn("OgHub Sync Error: " .. tostring(err)) end
 
         if ClientState.Connections.Env["ClothingEnforcer"] then ClientState.Connections.Env["ClothingEnforcer"]:Disconnect() end
         ClientState.Connections.Env["ClothingEnforcer"] = c.ChildAdded:Connect(function(child)
