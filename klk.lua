@@ -1400,7 +1400,6 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
     task.spawn(function()
         local t = tick()
         while not Player:HasAppearanceLoaded() and tick() - t < 3 do task.wait(0.1) end
-        task.wait(0.6) -- Extra buffer for games that assign outfits via server scripts
         
         if Player.Character ~= c then return end
 
@@ -1412,6 +1411,17 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         
         captureColors(c, true)
         syncCharacter(c)
+
+        if ClientState.Connections.Env["ClothingEnforcer"] then ClientState.Connections.Env["ClothingEnforcer"]:Disconnect() end
+        ClientState.Connections.Env["ClothingEnforcer"] = c.ChildAdded:Connect(function(child)
+            if child.Name == "OG_HUB_ScriptedItem" then return end
+            task.wait()
+            if not child.Parent then return end
+            if child:IsA("Shirt") then applyClothingItem(c, "Shirt", Library.Options.ShirtSelector.Value)
+            elseif child:IsA("Pants") then applyClothingItem(c, "Pants", Library.Options.PantsSelector.Value)
+            elseif child:IsA("ShirtGraphic") then applyClothingItem(c, "TShirt", Library.Options.TShirtSelector.Value)
+            end
+        end)
     end)
 end)
 
