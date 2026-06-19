@@ -46,7 +46,6 @@ local CONFIG = {
     AssetIDs = {
         HeadlessMesh = "http://www.roblox.com/asset/?id=134079402",
         HeadlessTex = "http://www.roblox.com/asset/?id=133940918",
-        SpongeBobSound = "rbxassetid://5948749731",
         FaceTexture = "http://www.roblox.com/asset/?id=42070872",
         KorbloxLeg = "rbxassetid://902942093",
         KorbloxUpper = "rbxassetid://902942096",
@@ -62,8 +61,8 @@ local CONFIG = {
         RightLeg = { "RightUpperLeg", "RightLowerLeg", "RightFoot", "Right Leg" },
     },
     Clothing = {
-        Shirt = { ["None"] = nil, ["SpongeBob"] = "http://www.roblox.com/asset/?id=16344768980" },
-        Pants = { ["None"] = nil, ["SpongeBob"] = "http://www.roblox.com/asset/?id=16344832667" },
+        Shirt = { ["None"] = nil },
+        Pants = { ["None"] = nil },
         TShirt = { ["None"] = nil, ["Oh Noez!"] = "http://www.roblox.com/asset/?id=1641286", ["Spread The Lulz!"] = "http://www.roblox.com/asset/?id=24774765" }
     },
     Animations = {
@@ -273,114 +272,6 @@ local function updateRainbow(enabled)
     end
 end
 
-local function setSound(char, enabled)
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local sound = hrp and hrp:FindFirstChild("Running")
-    if not sound then return end
-    
-    if not ClientState.Originals.Sound.Id then
-        ClientState.Originals.Sound.Id = sound.SoundId
-        ClientState.Originals.Sound.Pitch = sound.Pitch
-    end
-    
-    sound.SoundId = enabled and CONFIG.AssetIDs.SpongeBobSound or ClientState.Originals.Sound.Id
-    sound.Pitch = enabled and 1.2 or ClientState.Originals.Sound.Pitch
-end
-
-local function updateStormAtmosphere(enabled)
-    local Lighting = game:GetService("Lighting")
-    local TweenService = game:GetService("TweenService")
-
-    if enabled then
-        for p, _ in pairs({ClockTime=1, Brightness=1, Ambient=1, OutdoorAmbient=1, ShadowSoftness=1}) do 
-            if ClientState.Originals.Lighting[p] == nil then
-                ClientState.Originals.Lighting[p] = Lighting[p]
-            end
-        end
-        
-        for _, c in ipairs(Lighting:GetChildren()) do 
-            if c:IsA("Atmosphere") or c:IsA("ColorCorrectionEffect") then c:Destroy() end 
-        end
-        
-        local atmosphere = Instance.new("Atmosphere")
-        atmosphere.Name = "StormAtmosphere"
-        atmosphere.Density = 0.4
-        atmosphere.Offset = 0.25
-        atmosphere.Color = Color3.fromRGB(130, 140, 150)
-        atmosphere.Decay = Color3.fromRGB(80, 85, 90)
-        atmosphere.Glare = 0
-        atmosphere.Haze = 3
-        atmosphere.Parent = Lighting
-
-        local colorCorr = Instance.new("ColorCorrectionEffect")
-        colorCorr.Name = "StormColorCorr"
-        colorCorr.Saturation = -0.4
-        colorCorr.Contrast = 0.1
-        colorCorr.TintColor = Color3.fromRGB(170, 180, 190)
-        colorCorr.Brightness = -0.1
-        colorCorr.Parent = Lighting
-
-        TweenService:Create(Lighting, TweenInfo.new(3, Enum.EasingStyle.Sine), {
-            ClockTime = 17.5,
-            Brightness = 0.5,
-            Ambient = Color3.fromRGB(70, 75, 80),
-            OutdoorAmbient = Color3.fromRGB(60, 65, 70),
-            ShadowSoftness = 1
-        }):Play()
-    else
-        for _, c in ipairs(Lighting:GetChildren()) do 
-            if c.Name == "StormAtmosphere" or c.Name == "StormColorCorr" then c:Destroy() end 
-        end
-        
-        local restoreProps = {}
-        for p, _ in pairs({ClockTime=1, Brightness=1, Ambient=1, OutdoorAmbient=1, ShadowSoftness=1}) do
-            if ClientState.Originals.Lighting[p] ~= nil then
-                restoreProps[p] = ClientState.Originals.Lighting[p]
-            end
-        end
-        
-        if next(restoreProps) then
-            TweenService:Create(Lighting, TweenInfo.new(3, Enum.EasingStyle.Sine), restoreProps):Play()
-        end
-    end
-end
-
-local function updateSky(enabled)
-    local RENDER_STEP_NAME = "OG_SpongeBobSky_Loop"
-    if enabled then
-        -- Save Old
-        for p, _ in pairs({ClockTime=1, Brightness=1, Ambient=1, OutdoorAmbient=1}) do ClientState.Originals.Lighting[p] = Lighting[p] end
-        ClientState.Originals.Lighting.Sky = Lighting:FindFirstChildOfClass("Sky")
-        
-        -- Apply New
-        if ClientState.Originals.Lighting.Sky then ClientState.Originals.Lighting.Sky.Parent = nil end
-        for _, c in ipairs(Lighting:GetChildren()) do 
-            if c:IsA("Atmosphere") or c:IsA("Bloom") or c:IsA("ColorCorrection") or c:IsA("SunRays") then c:Destroy() end 
-        end
-        
-        local sky = Instance.new("Sky", Lighting)
-        sky.Name = "SpongeBobSky"
-        sky.SkyboxBk, sky.SkyboxDn, sky.SkyboxFt = "rbxassetid://7633178166", "rbxassetid://7633178166", "rbxassetid://7633178166"
-        sky.SkyboxLf, sky.SkyboxRt, sky.SkyboxUp = "rbxassetid://7633178166", "rbxassetid://7633178166", "rbxassetid://7633178166"
-        sky.CelestialBodiesShown = true
-        ClientState.Scripted.SkyObject = sky
-        
-        RunService:BindToRenderStep(RENDER_STEP_NAME, Enum.RenderPriority.Camera.Value + 10, function()
-             Lighting.ClockTime = 14; Lighting.Brightness = 2; 
-             Lighting.Ambient = Color3.fromRGB(135,140,150); Lighting.OutdoorAmbient = Color3.fromRGB(135,140,150)
-        end)
-    else
-        RunService:UnbindFromRenderStep(RENDER_STEP_NAME)
-        safeDestroy(ClientState.Scripted.SkyObject)
-        
-        -- Restore
-        for p, v in pairs(ClientState.Originals.Lighting) do
-            if p == "Sky" then if v then v.Parent = Lighting end else Lighting[p] = v end
-        end
-        ClientState.Originals.Lighting = {}
-    end
-end
-
 local function applyAnim(char, packName)
     task.spawn(function()
         if not char then return end
@@ -515,8 +406,6 @@ local function syncCharacter(char)
     applyClothingItem(char, "Pants", Library.Options.PantsSelector.Value)
     applyClothingItem(char, "TShirt", Library.Options.TShirtSelector.Value)
     applyAnim(char, Library.Options.AnimationPackSelector.Value)
-    
-    if Library.Toggles.SpongebobSoundToggle and Library.Toggles.SpongebobSoundToggle.Value then setSound(char, true) end
 end
 
 local function fullReset(char)
@@ -762,8 +651,7 @@ local Groups = {
     Tools = Tabs.Useful:AddLeftGroupbox("Tools"),
     TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"),
     TitanVis = Tabs.Titan:AddRightGroupbox("Visuals 🎨"),
-    TitanUtil = Tabs.Titan:AddLeftGroupbox("Utility ⚙️"),
-    TitanWeather = Tabs.Titan:AddRightGroupbox("Weather & Storm ⛈️")
+    TitanUtil = Tabs.Titan:AddLeftGroupbox("Utility ⚙️")
 }
 
 -- Populate Elements
@@ -791,9 +679,6 @@ Groups.Animation:AddDropdown("AnimationPackSelector", { Values = getKeys(CONFIG.
 Groups.Emotes:AddDropdown("EmoteSelector", { Values = getKeys(CONFIG.Emotes), Default = "None", Text = "Select Emote" })
 Groups.Emotes:AddButton("Play Emote ▶️", function() playEmote(Player.Character, Library.Options.EmoteSelector.Value) end)
 Groups.Emotes:AddButton("Stop Emote ⏹️", stopEmote)
-
-Groups.Sounds:AddToggle("SpongebobSoundToggle", { Text = "SpongeBob Walk Sound", Default = false, Callback = function(v) setSound(Player.Character, v) end })
-Groups.Visuals:AddToggle("SpongebobSkyToggle", { Text = "SpongeBob Sky", Default = false, Callback = updateSky })
 
 Groups.Tools:AddLabel("Toggle UI"):AddKeyPicker("ToggleUIKeybind", { Default = "RightControl", NoUI = true, Text = "Toggle UI" })
 Library.ToggleKeybind = Library.Options.ToggleUIKeybind
@@ -905,8 +790,6 @@ Groups.TitanEnv:AddSlider("RainIntensitySlider", {
         end
     end
 })
-
-Groups.TitanWeather:AddToggle("StormAtmosphereToggle", { Text = "Realistic Storm Atmosphere", Default = false, Callback = updateStormAtmosphere })
 
 Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
 
@@ -1066,10 +949,11 @@ Groups.TitanEnv:AddButton("Enforce Universal Sky", function()
             SkyboxRt = "rbxassetid://12216110471", SkyboxUp = "rbxassetid://12216108877"
         }
 
+        local RunService = game:GetService("RunService")
+
         local function enforceSky()
             if not skyObject or not skyObject.Parent then
                 skyObject = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
-                skyObject.Changed:Connect(enforceSky)
             end
             for prop, val in pairs(SPRING_SKYBOX) do 
                 if skyObject[prop] ~= val then skyObject[prop] = val end 
@@ -1092,7 +976,7 @@ Groups.TitanEnv:AddButton("Enforce Universal Sky", function()
         if ClientState.Connections.Env["Sky1"] then ClientState.Connections.Env["Sky1"]:Disconnect() end
         if ClientState.Connections.Env["Sky2"] then ClientState.Connections.Env["Sky2"]:Disconnect() end
         ClientState.Connections.Env["Sky1"] = Lighting.ChildAdded:Connect(clearEffects)
-        ClientState.Connections.Env["Sky2"] = Lighting.Changed:Connect(enforceSky)
+        ClientState.Connections.Env["Sky2"] = RunService.RenderStepped:Connect(enforceSky)
         Library:Notify({Title = "System", Content = "Universal Sky applied!", Duration = 3})
 end)
 
@@ -1464,17 +1348,12 @@ local function resetAllUI()
     Library.Options.AnimationPackSelector:SetValue("None")
     Library.Options.EmoteSelector:SetValue("None")
     stopEmote()
-    Library.Toggles.SpongebobSoundToggle:SetValue(false)
-    Library.Toggles.SpongebobSkyToggle:SetValue(false)
-    Library.Toggles.StormAtmosphereToggle:SetValue(false)
     Library.Toggles.RainbowMode:SetValue(false)
     resetColors()
 end
 
 Groups.Tools:AddButton("Reset All", function() fullReset(Player.Character); resetAllUI() end)
 Groups.Tools:AddButton("Unload Script", { Text = "Unload Script", DoubleClick = false, Risky = true, Func = function() 
-    if Library.Toggles.SpongebobSkyToggle and Library.Toggles.SpongebobSkyToggle.Value then updateSky(false) end
-    if Library.Toggles.StormAtmosphereToggle and Library.Toggles.StormAtmosphereToggle.Value then updateStormAtmosphere(false) end
     if ClientState.Connections.Rainbow then ClientState.Connections.Rainbow:Disconnect() end
     for _, c in pairs(ClientState.Connections.Env or {}) do if c then c:Disconnect() end end
     for _, c in ipairs(ClientState.Connections.Anonymizer or {}) do if c then c:Disconnect() end end
@@ -1501,14 +1380,21 @@ end })
 -- // Initialization \\ --
 ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     c:WaitForChild("Humanoid")
-    ClientState.Scripted = { Shirt=nil, Pants=nil, TShirt=nil, HeadlessMesh=nil, SkyObject=nil }
-    ClientState.Originals.LimbColors = {}
-    ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {} }
-    ClientState.Originals.FaceTexture = nil
-    ClientState.Originals.Sound = { Id = nil, Pitch = nil }
-    task.wait(0.2)
-    captureColors(c, true)
-    syncCharacter(c)
+    task.spawn(function()
+        local t = tick()
+        while not Player:HasAppearanceLoaded() and tick() - t < 3 do task.wait(0.1) end
+        
+        if Player.Character ~= c then return end
+
+        ClientState.Scripted = { Shirt=nil, Pants=nil, TShirt=nil, HeadlessMesh=nil, SkyObject=nil }
+        ClientState.Originals.LimbColors = {}
+        ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {} }
+        ClientState.Originals.FaceTexture = nil
+        ClientState.Originals.Sound = { Id = nil, Pitch = nil }
+        
+        captureColors(c, true)
+        syncCharacter(c)
+    end)
 end)
 
 if Player.Character then captureColors(Player.Character, true) end
