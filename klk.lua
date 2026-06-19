@@ -1418,14 +1418,22 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         local success, err = pcall(function() syncCharacter(c) end)
         if not success then warn("OgHub Sync Error: " .. tostring(err)) end
 
-        if ClientState.Connections.Env["ClothingEnforcer"] then ClientState.Connections.Env["ClothingEnforcer"]:Disconnect() end
-        ClientState.Connections.Env["ClothingEnforcer"] = c.ChildAdded:Connect(function(child)
-            if child.Name == "OG_HUB_ScriptedItem" then return end
+        if ClientState.Connections.Env["AppearanceEnforcer"] then ClientState.Connections.Env["AppearanceEnforcer"]:Disconnect() end
+        ClientState.Connections.Env["AppearanceEnforcer"] = c.DescendantAdded:Connect(function(child)
+            if not child.Parent then return end
+            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" then return end
+            
+            local p = child.Parent
+            while p and p ~= game do
+                if p.Name == "DrRayScriptedAccessory" or p:FindFirstChild("DrRayScriptedAccessory") then return end
+                p = p.Parent
+            end
+            
             task.wait()
             if not child.Parent then return end
-            if child:IsA("Shirt") then applyClothingItem(c, "Shirt", Library.Options.ShirtSelector.Value)
-            elseif child:IsA("Pants") then applyClothingItem(c, "Pants", Library.Options.PantsSelector.Value)
-            elseif child:IsA("ShirtGraphic") then applyClothingItem(c, "TShirt", Library.Options.TShirtSelector.Value)
+            
+            if child:IsA("Clothing") or child:IsA("ShirtGraphic") or child:IsA("Accessory") or child:IsA("BodyColors") or child:IsA("Decal") or child:IsA("SpecialMesh") then
+                pcall(function() syncCharacter(c) end)
             end
         end)
     end)
