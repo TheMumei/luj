@@ -779,7 +779,7 @@ Groups.Emotes:AddButton("Play Emote ▶️", function() playEmote(Player.Charact
 Groups.Emotes:AddButton("Stop Emote ⏹️", stopEmote)
 
 Groups.NameTag:AddInput("NameTagText", { Default = "[VIP]", Numeric = false, Finished = false, Text = "Tag Text", Placeholder = "[VIP]" })
-Groups.NameTag:AddColorPicker("NameTagColor", { Default = Color3.fromRGB(255, 215, 0), Title = "Tag Color" })
+Groups.NameTag:AddLabel("Tag Color"):AddColorPicker("NameTagColor", { Default = Color3.fromRGB(255, 215, 0), Title = "Tag Color" })
 Groups.NameTag:AddToggle("NameTagEnabled", { Text = "Enable NameTag", Default = false, Callback = function(v)
     if v then enableNameTag() else disableNameTag() end
 end })
