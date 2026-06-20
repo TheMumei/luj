@@ -1,5 +1,5 @@
 --[[
-    OG HUB - V4.0 (Optimized Core)
+    OG HUB - V4.1 (Optimized Core)
     - Internal Refactor: Consolidated repetitive functions into smart handlers.
     - Centralized State: All runtime data is now managed in a single table for cleaner resets.
     - Performance: Improved event handling and memory management.
@@ -36,7 +36,7 @@ local Window = Library:CreateWindow({
     Title = "OG HUB",
     SubTitle = "Optimized by MrOG & AI",
     Draggable = true,
-    Footer = "Made By gemini & Thank him | v1.1.0"
+    Footer = "Made By gemini & Thank him | v1.2.0"
 })
 
 -- // Configuration & Constants \\ --
