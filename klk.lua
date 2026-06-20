@@ -348,15 +348,29 @@ end
 
 local function addAcc(char, list)
     if not char then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
+    local head = char:FindFirstChild("Head")
+    local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
     
     for partName, ids in pairs(list) do
-        for _, id in ipairs(ids) do
-            local success, result = pcall(function() return game:GetObjects("rbxassetid://"..id)[1] end)
-            if success and result and result:IsA("Accessory") then
-                local tag = Instance.new("BoolValue", result); tag.Name = "DrRayScriptedAccessory"
-                humanoid:AddAccessory(result)
+        local target = (partName == "Head") and head or torso
+        if target then
+            for _, id in ipairs(ids) do
+                local success, result = pcall(function() return game:GetObjects("rbxassetid://"..id)[1] end)
+                if success and result then
+                    local tag = Instance.new("BoolValue", result); tag.Name = "DrRayScriptedAccessory"
+                    result.Parent = workspace
+                    local handle = result:FindFirstChild("Handle")
+                    if handle then
+                        local att = handle:FindFirstChildOfClass("Attachment")
+                        local targetAtt = att and findAtt(target, att.Name)
+                        if targetAtt then
+                            weld(target, handle, targetAtt.CFrame, att.CFrame)
+                        else
+                            weld(target, handle, CFrame.new(), CFrame.new())
+                        end
+                    end
+                    result.Parent = char
+                end
             end
         end
     end
