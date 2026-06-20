@@ -377,8 +377,11 @@ local function addAcc(char, list)
 end
 
 -- Master Sync Function
+local isSyncing = false
 local function syncCharacter(char)
     if not char then return end
+    if isSyncing then return end
+    isSyncing = true
     
     -- 1. Cleanup
     for _, c in ipairs(char:GetChildren()) do 
@@ -406,6 +409,11 @@ local function syncCharacter(char)
     applyClothingItem(char, "Pants", Library.Options.PantsSelector.Value)
     applyClothingItem(char, "TShirt", Library.Options.TShirtSelector.Value)
     applyAnim(char, Library.Options.AnimationPackSelector.Value)
+    
+    task.spawn(function()
+        task.wait(0.1)
+        isSyncing = false
+    end)
 end
 
 local function fullReset(char)
@@ -769,7 +777,10 @@ local Groups = {
 -- Populate Elements
 for name, data in pairs(allActions) do
     if Groups[data.category] then
-        Groups[data.category]:AddToggle(name, {Text = name, Default = false, Callback = function() syncCharacter(Player.Character) end})
+        Groups[data.category]:AddToggle(name, {Text = name, Default = false, Callback = function(v) 
+            if not v and data.type == "Function" then pcall(data.action, Player.Character, false) end
+            syncCharacter(Player.Character) 
+        end})
     end
 end
 
@@ -1537,6 +1548,16 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
             
             if child:IsA("Clothing") or child:IsA("ShirtGraphic") or child:IsA("Accessory") or child:IsA("BodyColors") or child:IsA("Decal") or child:IsA("SpecialMesh") then
                 pcall(function() syncCharacter(c) end)
+            end
+        end)
+        
+        if ClientState.Connections.Env["AppearanceEnforcer2"] then ClientState.Connections.Env["AppearanceEnforcer2"]:Disconnect() end
+        ClientState.Connections.Env["AppearanceEnforcer2"] = c.DescendantRemoving:Connect(function(child)
+            if isSyncing then return end
+            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" then
+                task.defer(function()
+                    if c.Parent then pcall(function() syncCharacter(c) end) end
+                end)
             end
         end)
     end)
