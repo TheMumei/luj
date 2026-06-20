@@ -125,7 +125,10 @@ local function findAtt(root, name)
 end
 
 local function safeDestroy(obj)
-    if obj and obj.Parent then obj:Destroy() end
+    if obj and obj.Parent then 
+        pcall(function() obj:SetAttribute("OgHubDestroying", true) end)
+        obj:Destroy() 
+    end
 end
 
 -- // Core Logic Functions \\ --
@@ -377,15 +380,12 @@ local function addAcc(char, list)
 end
 
 -- Master Sync Function
-local isSyncing = false
 local function syncCharacter(char)
     if not char then return end
-    if isSyncing then return end
-    isSyncing = true
     
     -- 1. Cleanup
     for _, c in ipairs(char:GetChildren()) do 
-        if c:IsA("Accessory") and c:FindFirstChild("DrRayScriptedAccessory") then c:Destroy() end 
+        if c:IsA("Accessory") and c:FindFirstChild("DrRayScriptedAccessory") then safeDestroy(c) end 
     end
     
     -- 2. Toggles
@@ -409,11 +409,6 @@ local function syncCharacter(char)
     applyClothingItem(char, "Pants", Library.Options.PantsSelector.Value)
     applyClothingItem(char, "TShirt", Library.Options.TShirtSelector.Value)
     applyAnim(char, Library.Options.AnimationPackSelector.Value)
-    
-    task.spawn(function()
-        task.wait(0.1)
-        isSyncing = false
-    end)
 end
 
 local function fullReset(char)
@@ -1553,7 +1548,7 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         
         if ClientState.Connections.Env["AppearanceEnforcer2"] then ClientState.Connections.Env["AppearanceEnforcer2"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer2"] = c.DescendantRemoving:Connect(function(child)
-            if isSyncing then return end
+            if child:GetAttribute("OgHubDestroying") then return end
             if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then
                 task.defer(function()
                     if c.Parent then pcall(function() syncCharacter(c) end) end
