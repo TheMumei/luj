@@ -649,7 +649,11 @@ local function ensureEffects()
 end
 
 -- // NameTag Logic \\ --
+local lastNameTagUpdate = 0
 local function updateNameTag()
+    if tick() - lastNameTagUpdate < 0.5 then return end
+    lastNameTagUpdate = tick()
+
     local enabled = Library.Toggles.NameTagEnabled and Library.Toggles.NameTagEnabled.Value
     if not enabled then return end
     
@@ -666,42 +670,46 @@ local function updateNameTag()
         end
     end
     
-    local CoreGui = game:GetService("CoreGui")
-    local list = CoreGui:FindFirstChild("PlayerList")
-    if list then
-        for _, obj in ipairs(list:GetDescendants()) do
-            if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                local txt = obj.Text
-                if txt == Player.Name or txt == Player.DisplayName then
-                    if not string.find(txt, tag, 1, true) then
-                        obj.Text = tag .. " " .. txt
-                        obj.TextColor3 = col
-                    end
-                end
-            end
-        end
-    end
-    
-    local pg = Player:FindFirstChild("PlayerGui")
-    if pg then
-        local mg = pg:FindFirstChild("MainGui")
-        local main = mg and mg:FindFirstChild("main")
-        local tos = main and main:FindFirstChild("tos")
-        local s = tos and tos:FindFirstChild("scroll")
-        if s then
-            for _, sample in ipairs(s:GetChildren()) do
-                if sample.Name == "sample" then
-                    local nl = sample:FindFirstChild("name")
-                    if nl and nl:IsA("TextLabel") and string.find(nl.Text, Player.Name, 1, true) then
-                        if not string.find(nl.Text, tag, 1, true) then
-                            nl.Text = tag .. " " .. nl.Text
-                            nl.TextColor3 = col
+    pcall(function()
+        local CoreGui = game:GetService("CoreGui")
+        local list = CoreGui:FindFirstChild("PlayerList")
+        if list then
+            for _, obj in ipairs(list:GetDescendants()) do
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                    local txt = obj.Text
+                    if txt == Player.Name or txt == Player.DisplayName then
+                        if not string.find(txt, tag, 1, true) then
+                            obj.Text = tag .. " " .. txt
+                            obj.TextColor3 = col
                         end
                     end
                 end
             end
         end
-    end
+    end)
+    
+    pcall(function()
+        local pg = Player:FindFirstChild("PlayerGui")
+        if pg then
+            local mg = pg:FindFirstChild("MainGui")
+            local main = mg and mg:FindFirstChild("main")
+            local tos = main and main:FindFirstChild("tos")
+            local s = tos and tos:FindFirstChild("scroll")
+            if s then
+                for _, sample in ipairs(s:GetChildren()) do
+                    if sample.Name == "sample" then
+                        local nl = sample:FindFirstChild("name")
+                        if nl and nl:IsA("TextLabel") and string.find(nl.Text, Player.Name, 1, true) then
+                            if not string.find(nl.Text, tag, 1, true) then
+                                nl.Text = tag .. " " .. nl.Text
+                                nl.TextColor3 = col
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
 end
 
 local function enableNameTag()
