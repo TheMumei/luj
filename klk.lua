@@ -90,7 +90,7 @@ local ClientState = {
         FaceTexture = nil,
         Sound = { Id = nil, Pitch = nil },
         Lighting = {},
-        Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {} },
+        Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} },
         LimbData = {}
     },
     Scripted = {
@@ -348,29 +348,15 @@ end
 
 local function addAcc(char, list)
     if not char then return end
-    local head = char:FindFirstChild("Head")
-    local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
     
     for partName, ids in pairs(list) do
-        local target = (partName == "Head") and head or torso
-        if target then
-            for _, id in ipairs(ids) do
-                local success, result = pcall(function() return game:GetObjects("rbxassetid://"..id)[1] end)
-                if success and result then
-                    local tag = Instance.new("BoolValue", result); tag.Name = "DrRayScriptedAccessory"
-                    result.Parent = workspace -- Temp parent for setup
-                    local handle = result:FindFirstChild("Handle")
-                    if handle then
-                        local att = handle:FindFirstChildOfClass("Attachment")
-                        local targetAtt = att and findAtt(target, att.Name)
-                        if targetAtt then
-                            weld(target, handle, targetAtt.CFrame, att.CFrame)
-                        else
-                            weld(target, handle, CFrame.new(), CFrame.new())
-                        end
-                    end
-                    result.Parent = char
-                end
+        for _, id in ipairs(ids) do
+            local success, result = pcall(function() return game:GetObjects("rbxassetid://"..id)[1] end)
+            if success and result and result:IsA("Accessory") then
+                local tag = Instance.new("BoolValue", result); tag.Name = "DrRayScriptedAccessory"
+                humanoid:AddAccessory(result)
             end
         end
     end
@@ -446,7 +432,8 @@ local function fullReset(char)
         end
     end
     
-    ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {} }
+    ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }
+    ClientState.Originals.LimbData = {}
     applyAnim(char, "None")
 end
 
@@ -485,13 +472,23 @@ allActions = {
     ["Korblox"] = { category = "Body", type = "Function", action = function(c, e)
         if not (c and c:FindFirstChild("RightLowerLeg")) then return end
         if e then
-            -- Store original ID logic could be added here if needed, but reset handles full restore
+            if not ClientState.Originals.LimbData["Korblox"] then
+                ClientState.Originals.LimbData["Korblox"] = {
+                    LowerMesh = c.RightLowerLeg.MeshId, LowerTrans = c.RightLowerLeg.Transparency,
+                    UpperMesh = c.RightUpperLeg.MeshId, UpperTex = c.RightUpperLeg.TextureID,
+                    FootMesh = c.RightFoot.MeshId, FootTrans = c.RightFoot.Transparency
+                }
+            end
             c.RightLowerLeg.MeshId = CONFIG.AssetIDs.KorbloxLeg; c.RightLowerLeg.Transparency = 1
             c.RightUpperLeg.MeshId = CONFIG.AssetIDs.KorbloxUpper; c.RightUpperLeg.TextureID = CONFIG.AssetIDs.KorbloxTex
             c.RightFoot.MeshId = CONFIG.AssetIDs.KorbloxFoot; c.RightFoot.Transparency = 1
         else
-            -- Korblox requires a full character reset to fix properly usually, simplified here:
-            fullReset(c) -- Forcing reset on disable to fix mesh mess
+            local orig = ClientState.Originals.LimbData["Korblox"]
+            if orig then
+                c.RightLowerLeg.MeshId = orig.LowerMesh; c.RightLowerLeg.Transparency = orig.LowerTrans
+                c.RightUpperLeg.MeshId = orig.UpperMesh; c.RightUpperLeg.TextureID = orig.UpperTex
+                c.RightFoot.MeshId = orig.FootMesh; c.RightFoot.Transparency = orig.FootTrans
+            end
         end
     end},
     ["Naked"] = { category = "Body", type = "Function", action = function(c, e)
@@ -516,11 +513,11 @@ allActions = {
         if e then
              for _, h in ipairs(c:GetChildren()) do
                 if h:IsA("Accessory") and h.AccessoryType == Enum.AccessoryType.Hair then
-                    table.insert(removedHairStorage, h); h.Parent = nil
+                    table.insert(ClientState.Originals.Clothing.Hair, h); h.Parent = nil
                 end
              end
         else
-             for _, h in ipairs(removedHairStorage) do h.Parent = c end; removedHairStorage = {}
+             for _, h in ipairs(ClientState.Originals.Clothing.Hair) do h.Parent = c end; ClientState.Originals.Clothing.Hair = {}
         end
     end},
     ["Epic Face"] = { category = "Faces", type = "Function", action = function(c, e)
@@ -534,29 +531,32 @@ allActions = {
         end
     end},
     ["Scary Smile Outfit"] = { category = "Outfits", type = "Function", action = function(c, e)
-        -- Complex outfit logic simplified or kept as specific case
         if not c then return end
         if e then
-             -- Clean existing
-             for _, x in ipairs(c:GetChildren()) do if (x:IsA("Accessory") and x.Name=="ScarySmileAccessory") or x:IsA("Shirt") or x:IsA("Pants") then x:Destroy() end end
-             if c.Head then for _, d in ipairs(c.Head:GetChildren()) do if d:IsA("Decal") then d:Destroy() end end end
+             local s = c:FindFirstChildOfClass("Shirt"); if s and not ClientState.Originals.Clothing.Shirt then ClientState.Originals.Clothing.Shirt = s; s.Parent = nil end
+             local p = c:FindFirstChildOfClass("Pants"); if p and not ClientState.Originals.Clothing.Pants then ClientState.Originals.Clothing.Pants = p; p.Parent = nil end
+             if c.Head then 
+                 local face = c.Head:FindFirstChild("face") or c.Head:FindFirstChildOfClass("Decal")
+                 if face then 
+                     if not ClientState.Originals.FaceTexture then ClientState.Originals.FaceTexture = face.Texture end
+                     face.Transparency = 1 
+                 end
+             end
+             for _, x in ipairs(c:GetChildren()) do if x:IsA("Accessory") and x.Name=="ScarySmileAccessory" then safeDestroy(x) end end
              
-             -- Build
              local acc = Instance.new("Accessory"); acc.Name = "ScarySmileAccessory"
              local h = Instance.new("Part", acc); h.Name="Handle"; h.Size=Vector3.one; h.Transparency=1
              local m = Instance.new("SpecialMesh", h); m.MeshType=Enum.MeshType.FileMesh; m.MeshId="rbxassetid://111022241256851"; m.Scale=Vector3.new(1.03,1.03,1.03)
              local d = Instance.new("Decal", h); d.Face=Enum.NormalId.Front; d.Texture="http://www.roblox.com/asset/?id=120935988855219"
              
-             if c.Head then
-                 local att = c.Head:FindFirstChild("FaceCenterAttachment") or c.Head:FindFirstChild("FaceFrontAttachment")
-                 if att then weld(h, c.Head, att.CFrame, CFrame.new()) end
-             end
-             acc.Parent = c
+             local hum = c:FindFirstChildOfClass("Humanoid")
+             if hum then hum:AddAccessory(acc) else acc.Parent = c end
              
-             local s = Instance.new("Shirt", c); s.ShirtTemplate="http://www.roblox.com/asset/?id=11275376793"
-             local p = Instance.new("Pants", c); p.PantsTemplate="http://www.roblox.com/asset/?id=5043452775"
+             local ns = Instance.new("Shirt", c); ns.Name = "OG_HUB_ScriptedItem"; ns.ShirtTemplate="http://www.roblox.com/asset/?id=11275376793"
+             local np = Instance.new("Pants", c); np.Name = "OG_HUB_ScriptedItem"; np.PantsTemplate="http://www.roblox.com/asset/?id=5043452775"
         else
-             syncCharacter(c) -- Revert to sync state
+             for _, x in ipairs(c:GetChildren()) do if x.Name == "OG_HUB_ScriptedItem" or x.Name == "ScarySmileAccessory" then safeDestroy(x) end end
+             syncCharacter(c)
         end
     end},
     ["Remove Original Shirt"] = { category = "Outfit", type = "Function", action = function(c,e) 
@@ -648,6 +648,78 @@ local function ensureEffects()
     end
 end
 
+-- // NameTag Logic \\ --
+local function updateNameTag()
+    local enabled = Library.Toggles.NameTagEnabled and Library.Toggles.NameTagEnabled.Value
+    if not enabled then return end
+    
+    local tag = Library.Options.NameTagText and Library.Options.NameTagText.Value or "[VIP]"
+    local col = Library.Options.NameTagColor and Library.Options.NameTagColor.Value or Color3.fromRGB(255, 215, 0)
+    
+    if Player.Character then
+        local hum = Player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local expectedName = tag .. " " .. Player.Name
+            if hum.DisplayName ~= expectedName then
+                hum.DisplayName = expectedName
+            end
+        end
+    end
+    
+    local CoreGui = game:GetService("CoreGui")
+    local list = CoreGui:FindFirstChild("PlayerList")
+    if list then
+        for _, obj in ipairs(list:GetDescendants()) do
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                local txt = obj.Text
+                if txt == Player.Name or txt == Player.DisplayName then
+                    if not string.find(txt, tag, 1, true) then
+                        obj.Text = tag .. " " .. txt
+                        obj.TextColor3 = col
+                    end
+                end
+            end
+        end
+    end
+    
+    local pg = Player:FindFirstChild("PlayerGui")
+    if pg then
+        local mg = pg:FindFirstChild("MainGui")
+        local main = mg and mg:FindFirstChild("main")
+        local tos = main and main:FindFirstChild("tos")
+        local s = tos and tos:FindFirstChild("scroll")
+        if s then
+            for _, sample in ipairs(s:GetChildren()) do
+                if sample.Name == "sample" then
+                    local nl = sample:FindFirstChild("name")
+                    if nl and nl:IsA("TextLabel") and string.find(nl.Text, Player.Name, 1, true) then
+                        if not string.find(nl.Text, tag, 1, true) then
+                            nl.Text = tag .. " " .. nl.Text
+                            nl.TextColor3 = col
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function enableNameTag()
+    if ClientState.Connections.Env["NameTagLoop"] then ClientState.Connections.Env["NameTagLoop"]:Disconnect() end
+    ClientState.Connections.Env["NameTagLoop"] = RunService.RenderStepped:Connect(updateNameTag)
+end
+
+local function disableNameTag()
+    if ClientState.Connections.Env["NameTagLoop"] then 
+        ClientState.Connections.Env["NameTagLoop"]:Disconnect() 
+        ClientState.Connections.Env["NameTagLoop"] = nil 
+    end
+    if Player.Character then
+        local hum = Player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.DisplayName = Player.DisplayName end
+    end
+end
+
 -- // UI Construction \\ --
 local Tabs = {
     Appearance = Window:AddTab("Appearance", "shirt"),
@@ -664,6 +736,7 @@ local Groups = {
     Outfit = Tabs.Appearance:AddLeftGroupbox("Outfit Management (Original)"),
     Animation = Tabs.Appearance:AddLeftGroupbox("Animation"),
     Emotes = Tabs.Appearance:AddRightGroupbox("Custom Emotes & Dances"),
+    NameTag = Tabs.Appearance:AddRightGroupbox("Custom NameTag"),
     Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
     Tools = Tabs.Useful:AddLeftGroupbox("Tools"),
     TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"),
@@ -696,6 +769,12 @@ Groups.Animation:AddDropdown("AnimationPackSelector", { Values = getKeys(CONFIG.
 Groups.Emotes:AddDropdown("EmoteSelector", { Values = getKeys(CONFIG.Emotes), Default = "None", Text = "Select Emote" })
 Groups.Emotes:AddButton("Play Emote ▶️", function() playEmote(Player.Character, Library.Options.EmoteSelector.Value) end)
 Groups.Emotes:AddButton("Stop Emote ⏹️", stopEmote)
+
+Groups.NameTag:AddInput("NameTagText", { Default = "[VIP]", Numeric = false, Finished = false, Text = "Tag Text", Placeholder = "[VIP]" })
+Groups.NameTag:AddColorPicker("NameTagColor", { Default = Color3.fromRGB(255, 215, 0), Title = "Tag Color" })
+Groups.NameTag:AddToggle("NameTagEnabled", { Text = "Enable NameTag", Default = false, Callback = function(v)
+    if v then enableNameTag() else disableNameTag() end
+end })
 
 Groups.Tools:AddLabel("Toggle UI"):AddKeyPicker("ToggleUIKeybind", { Default = "RightControl", NoUI = true, Text = "Toggle UI" })
 Library.ToggleKeybind = Library.Options.ToggleUIKeybind
@@ -982,7 +1061,7 @@ Groups.TitanEnv:AddButton("Enforce Universal Sky", function()
 
         local function clearEffects()
             for _, child in ipairs(Lighting:GetChildren()) do
-                if child:IsA("Atmosphere") or child:IsA("Bloom") or child:IsA("ColorCorrection") or child:IsA("SunRays") then
+                if (child:IsA("Atmosphere") or child:IsA("Bloom") or child:IsA("ColorCorrection") or child:IsA("SunRays")) and not string.match(child.Name, "^MyRTX_") then
                     child:Destroy()
                 end
             end
@@ -1359,6 +1438,7 @@ end)
 
 local function resetAllUI()
     for name, _ in pairs(allActions) do if Library.Toggles[name] then Library.Toggles[name]:SetValue(false) end end
+    if Library.Toggles.NameTagEnabled then Library.Toggles.NameTagEnabled:SetValue(false) end
     Library.Options.ShirtSelector:SetValue("None")
     Library.Options.PantsSelector:SetValue("None")
     Library.Options.TShirtSelector:SetValue("None")
@@ -1409,7 +1489,8 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
 
         ClientState.Scripted = { Shirt=nil, Pants=nil, TShirt=nil, HeadlessMesh=nil, SkyObject=nil }
         ClientState.Originals.LimbColors = {}
-        ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {} }
+        ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }
+        ClientState.Originals.LimbData = {}
         ClientState.Originals.FaceTexture = nil
         ClientState.Originals.Sound = { Id = nil, Pitch = nil }
         ClientState.Originals.Headless = nil
