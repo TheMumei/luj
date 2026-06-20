@@ -1535,11 +1535,11 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         if ClientState.Connections.Env["AppearanceEnforcer"] then ClientState.Connections.Env["AppearanceEnforcer"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer"] = c.DescendantAdded:Connect(function(child)
             if not child.Parent then return end
-            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" then return end
+            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then return end
             
             local p = child.Parent
             while p and p ~= game do
-                if p.Name == "DrRayScriptedAccessory" or p:FindFirstChild("DrRayScriptedAccessory") then return end
+                if p.Name == "OG_HUB_ScriptedItem" or p:FindFirstChild("DrRayScriptedAccessory") then return end
                 p = p.Parent
             end
             
@@ -1554,7 +1554,7 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         if ClientState.Connections.Env["AppearanceEnforcer2"] then ClientState.Connections.Env["AppearanceEnforcer2"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer2"] = c.DescendantRemoving:Connect(function(child)
             if isSyncing then return end
-            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" then
+            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then
                 task.defer(function()
                     if c.Parent then pcall(function() syncCharacter(c) end) end
                 end)
