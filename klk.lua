@@ -1002,7 +1002,9 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
                 if part:IsA("MeshPart") then part.TextureID = "" end
                 part.MaterialVariant = variantName
                 for _, child in ipairs(part:GetChildren()) do
-                    if child:IsA("Texture") or child:IsA("Decal") or child:IsA("SurfaceAppearance") then
+                    if child:IsA("Texture") or child:IsA("Decal") then
+                        child.Transparency = 1
+                    elseif child:IsA("SurfaceAppearance") then
                         child:Destroy()
                     end
                 end
