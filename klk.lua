@@ -1001,7 +1001,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
 
             local function ProcessPartLogic(part, variantName)
                 if not part.Parent or IsHumanoidPart(part) then return end
-                if part:IsA("MeshPart") then part.TextureID = "" end
                 part.MaterialVariant = variantName
                 for _, child in ipairs(part:GetChildren()) do
                     if child:IsA("Texture") or child:IsA("Decal") then
