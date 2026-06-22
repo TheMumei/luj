@@ -219,6 +219,7 @@ local function applyClothingItem(char, typeStr, itemName)
                 end
             end
             local newItem = Instance.new("ShirtGraphic")
+            newItem.Name = "OG_HUB_ScriptedItem"
             newItem.Graphic = assetId
             newItem.Parent = char
             ClientState.Scripted.TShirt = newItem
@@ -241,6 +242,7 @@ local function applyClothingItem(char, typeStr, itemName)
             end
             
             local newItem = Instance.new(className)
+            newItem.Name = "OG_HUB_ScriptedItem"
             newItem[propName] = assetId
             newItem.Parent = char
             ClientState.Scripted[typeStr] = newItem
@@ -569,8 +571,8 @@ allActions = {
              local hum = c:FindFirstChildOfClass("Humanoid")
              if hum then hum:AddAccessory(acc) else acc.Parent = c end
              
-             local ns = Instance.new("Shirt", c); ns.Name = "OG_HUB_ScriptedItem"; ns.ShirtTemplate="http://www.roblox.com/asset/?id=11275376793"
-             local np = Instance.new("Pants", c); np.Name = "OG_HUB_ScriptedItem"; np.PantsTemplate="http://www.roblox.com/asset/?id=5043452775"
+             local ns = Instance.new("Shirt"); ns.Name = "OG_HUB_ScriptedItem"; ns.ShirtTemplate="http://www.roblox.com/asset/?id=11275376793"; ns.Parent = c
+             local np = Instance.new("Pants"); np.Name = "OG_HUB_ScriptedItem"; np.PantsTemplate="http://www.roblox.com/asset/?id=5043452775"; np.Parent = c
         else
              for _, x in ipairs(c:GetChildren()) do if x.Name == "OG_HUB_ScriptedItem" or x.Name == "ScarySmileAccessory" then safeDestroy(x) end end
              syncCharacter(c)
@@ -679,7 +681,7 @@ local function updateNameTag()
     
     if Player.Character then
         local hum = Player.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
+        if hum and not _G.AnonymizerLoaded then
             local expectedName = tag .. " " .. Player.Name
             if hum.DisplayName ~= expectedName then
                 hum.DisplayName = expectedName
@@ -739,7 +741,7 @@ local function disableNameTag()
         ClientState.Connections.Env["NameTagLoop"]:Disconnect() 
         ClientState.Connections.Env["NameTagLoop"] = nil 
     end
-    if Player.Character then
+    if Player.Character and not _G.AnonymizerLoaded then
         local hum = Player.Character:FindFirstChildOfClass("Humanoid")
         if hum then hum.DisplayName = Player.DisplayName end
     end
