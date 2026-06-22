@@ -1005,8 +1005,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
                 for _, child in ipairs(part:GetChildren()) do
                     if child:IsA("Texture") or child:IsA("Decal") then
                         child.Transparency = 1
-                    elseif child:IsA("SurfaceAppearance") then
-                        child:Destroy()
                     end
                 end
             end
