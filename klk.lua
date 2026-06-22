@@ -1101,7 +1101,20 @@ Groups.TitanEnv:AddButton("Enforce Universal Sky", function()
         enforceSky()
         if ClientState.Connections.Env["Sky1"] then ClientState.Connections.Env["Sky1"]:Disconnect() end
         if ClientState.Connections.Env["Sky2"] then ClientState.Connections.Env["Sky2"]:Disconnect() end
-        ClientState.Connections.Env["Sky1"] = Lighting.ChildAdded:Connect(clearEffects)
+        
+        local lightingSpamCount = 0
+        local lastLightingSpam = tick()
+        ClientState.Connections.Env["Sky1"] = Lighting.ChildAdded:Connect(function(child)
+            if tick() - lastLightingSpam > 1 then lightingSpamCount = 0 end
+            lastLightingSpam = tick()
+            if lightingSpamCount > 10 then return end
+            
+            if (child:IsA("Atmosphere") or child:IsA("Bloom") or child:IsA("ColorCorrection") or child:IsA("SunRays")) and not string.match(child.Name, "^MyRTX_") then
+                lightingSpamCount = lightingSpamCount + 1
+                task.defer(function() pcall(function() child:Destroy() end) end)
+            end
+        end)
+        
         ClientState.Connections.Env["Sky2"] = RunService.RenderStepped:Connect(enforceSky)
         Library:Notify({Title = "System", Content = "Universal Sky applied!", Duration = 3})
 end)
@@ -1180,7 +1193,8 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
         local Players = game:GetService("Players")
         local RunService = game:GetService("RunService")
         local CoreGui = game:GetService("CoreGui")
-        local TextChatService = game:GetService("TextChatService")
+        local success, TextChatService = pcall(function() return game:GetService("TextChatService") end)
+        if not success then TextChatService = nil end
         local LocalPlayer = Players.LocalPlayer
 
         local Config = {
@@ -1379,11 +1393,13 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
         local ChatHandler = {}
         function ChatHandler.setupTextChatServiceFilter()
             if not TextChatService then return end
-            TextChatService.OnIncomingMessage = function(m)
-                local p = Instance.new("TextChatMessageProperties")
-                pcall(function() p.Text = Anonymizer.replaceText(m.Text) end)
-                return p
-            end
+            pcall(function()
+                TextChatService.OnIncomingMessage = function(m)
+                    local p = Instance.new("TextChatMessageProperties")
+                    pcall(function() p.Text = Anonymizer.replaceText(m.Text) end)
+                    return p
+                end
+            end)
         end
 
         function ChatHandler.setupSystemMessageFilter() 
