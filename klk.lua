@@ -1,12 +1,12 @@
 --[[
-    OG HUB - V4.1 (Optimized Core)
+    WhiteRose - V4.1 (Optimized Core)
     - Internal Refactor: Consolidated repetitive functions into smart handlers.
     - Centralized State: All runtime data is now managed in a single table for cleaner resets.
     - Performance: Improved event handling and memory management.
     - All previous fixes (Colors, Headless, SpongeBob, Respawn) are preserved.
 ]]
 
-if getgenv().OGHubLoaded then return end
+if getgenv().WhiteRoseLoaded then return end
 
 -- // Services \\ --
 local Players = game:GetService("Players")
@@ -18,7 +18,7 @@ local TweenService = game:GetService("TweenService")
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local success, Library = pcall(function() return loadstring(game:HttpGet(repo .. "Library.lua"))() end)
 if not success or not Library then
-    warn("OG HUB: Library failed to load.")
+    warn("WhiteRose: Library failed to load.")
     return
 end
 
@@ -27,13 +27,13 @@ local sS, SaveManager = pcall(function() return loadstring(game:HttpGet(repo .. 
 ThemeManager = sT and ThemeManager or nil
 SaveManager = sS and SaveManager or nil
 
-getgenv().OGHubLoaded = true
+getgenv().WhiteRoseLoaded = true
 local Player = Players.LocalPlayer
 
 -- // UI Setup \\ --
 local Window = Library:CreateWindow({
-    Name = "OG HUB",
-    Title = "OG HUB",
+    Name = "WhiteRose",
+    Title = "WhiteRose",
     SubTitle = "Optimized by MrOG & AI",
     Draggable = true,
     Footer = "Made By gemini & Thank him | v1.2.0"
@@ -41,7 +41,7 @@ local Window = Library:CreateWindow({
 
 -- // Configuration & Constants \\ --
 local CONFIG = {
-    RenderName = "OG_HUB_SkyUpdate",
+    RenderName = "WhiteRose_SkyUpdate",
     RainbowSpeed = 0.5,
     AssetIDs = {
         HeadlessMesh = "http://www.roblox.com/asset/?id=134079402",
@@ -127,12 +127,12 @@ end
 local function safeDestroy(obj)
     if obj and obj.Parent then 
         pcall(function() 
-            obj:SetAttribute("OgHubDestroying", true)
+            obj:SetAttribute("WhiteRoseDestroying", true)
             -- Tag every descendant too: Destroy() fires DescendantRemoving once per
             -- descendant, and only the root object was getting flagged before, so
             -- children (e.g. the DrRayScriptedAccessory tag) slipped past the
             -- AppearanceEnforcer2 filter and re-triggered a sync.
-            for _, d in ipairs(obj:GetDescendants()) do d:SetAttribute("OgHubDestroying", true) end
+            for _, d in ipairs(obj:GetDescendants()) do d:SetAttribute("WhiteRoseDestroying", true) end
         end)
         obj:Destroy() 
     end
@@ -226,7 +226,7 @@ local function applyClothingItem(char, typeStr, itemName)
                 end
             end
             local newItem = Instance.new("ShirtGraphic")
-            newItem.Name = "OG_HUB_ScriptedItem"
+            newItem.Name = "WhiteRose_ScriptedItem"
             newItem.Graphic = assetId
             newItem.Parent = char
             ClientState.Scripted.TShirt = newItem
@@ -249,7 +249,7 @@ local function applyClothingItem(char, typeStr, itemName)
             end
             
             local newItem = Instance.new(className)
-            newItem.Name = "OG_HUB_ScriptedItem"
+            newItem.Name = "WhiteRose_ScriptedItem"
             newItem[propName] = assetId
             newItem.Parent = char
             ClientState.Scripted[typeStr] = newItem
@@ -436,7 +436,7 @@ local function requestSync(char)
         syncRunning = true
         local ok, err = pcall(syncCharacter, char)
         syncRunning = false
-        if not ok then warn("OgHub Sync Error: " .. tostring(err)) end
+        if not ok then warn("WhiteRose Sync Error: " .. tostring(err)) end
     end)
 end
 
@@ -598,10 +598,10 @@ allActions = {
              local hum = c:FindFirstChildOfClass("Humanoid")
              if hum then hum:AddAccessory(acc) else acc.Parent = c end
              
-             local ns = Instance.new("Shirt"); ns.Name = "OG_HUB_ScriptedItem"; ns.ShirtTemplate="http://www.roblox.com/asset/?id=11275376793"; ns.Parent = c
-             local np = Instance.new("Pants"); np.Name = "OG_HUB_ScriptedItem"; np.PantsTemplate="http://www.roblox.com/asset/?id=5043452775"; np.Parent = c
+             local ns = Instance.new("Shirt"); ns.Name = "WhiteRose_ScriptedItem"; ns.ShirtTemplate="http://www.roblox.com/asset/?id=11275376793"; ns.Parent = c
+             local np = Instance.new("Pants"); np.Name = "WhiteRose_ScriptedItem"; np.PantsTemplate="http://www.roblox.com/asset/?id=5043452775"; np.Parent = c
         else
-             for _, x in ipairs(c:GetChildren()) do if x.Name == "OG_HUB_ScriptedItem" or x.Name == "ScarySmileAccessory" then safeDestroy(x) end end
+             for _, x in ipairs(c:GetChildren()) do if x.Name == "WhiteRose_ScriptedItem" or x.Name == "ScarySmileAccessory" then safeDestroy(x) end end
              syncCharacter(c)
         end
     end},
@@ -1176,38 +1176,6 @@ Groups.TitanVis:AddButton("Activate RTX Day Mode ☀️", function()
         Library:Notify({Title = "Visuals", Content = "RTX Day Mode Applied!", Duration = 3})
 end)
 
-Groups.TitanVis:AddButton("Activate RTX Night Mode 🌙", function()
-
-        ensureEffects()
-        playSafeTween(Lighting, {
-            ClockTime = 0, Brightness = 2,
-            Ambient = Color3.fromRGB(50, 50, 80), OutdoorAmbient = Color3.fromRGB(30, 30, 60),
-            FogColor = Color3.fromRGB(15, 15, 30), FogStart = 200, FogEnd = 800, ExposureCompensation = -0.3 
-        })
-        playSafeTween(atmosphere, {Color = Color3.fromRGB(40, 40, 60), Decay = Color3.fromRGB(20, 20, 30)})
-        playSafeTween(sunRays, {Intensity = 0})
-        playSafeTween(bloom, {Intensity = 1.5, Threshold = 0.8, Size = 64})
-        playSafeTween(colorCorr, {Saturation = 0, Contrast = 0, TintColor = Color3.fromRGB(255, 255, 255)})
-        playSafeTween(blur, {Size = 0})
-        Library:Notify({Title = "Visuals", Content = "RTX Night Mode Applied!", Duration = 3})
-end)
-
-Groups.TitanVis:AddButton("Activate Silent Hill Horror Mode 📼", function()
-
-        ensureEffects()
-        playSafeTween(Lighting, {
-            ClockTime = 0, Brightness = 0.5,
-            Ambient = Color3.fromRGB(30, 30, 30), OutdoorAmbient = Color3.fromRGB(20, 20, 20),
-            FogColor = Color3.fromRGB(80, 80, 80), FogStart = 0, FogEnd = 120, ExposureCompensation = -0.5 
-        })
-        playSafeTween(atmosphere, {Color = Color3.fromRGB(40, 40, 40), Decay = Color3.fromRGB(20, 20, 20)})
-        playSafeTween(sunRays, {Intensity = 0})
-        playSafeTween(bloom, {Intensity = 0.2, Threshold = 0.5, Size = 10})
-        playSafeTween(colorCorr, {Saturation = -0.85, Contrast = 0.5, TintColor = Color3.fromRGB(140, 155, 140)})
-        playSafeTween(blur, {Size = 4})
-        Library:Notify({Title = "Visuals", Content = "Horror Mode Applied!", Duration = 3})
-end)
-
 -- ==========================================
 -- Utility Tab (Buttons)
 -- ==========================================
@@ -1545,7 +1513,7 @@ Groups.Tools:AddButton("Unload Script", { Text = "Unload Script", DoubleClick = 
     _G.AnonymizerLoaded = false
     fullReset(Player.Character)
     if ClientState.Connections.CharacterAdded then ClientState.Connections.CharacterAdded:Disconnect() end
-    getgenv().OGHubLoaded = nil
+    getgenv().WhiteRoseLoaded = nil
     Library:Unload()
 end })
 
@@ -1572,7 +1540,7 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         
         captureColors(c, true)
         local success, err = pcall(function() syncCharacter(c) end)
-        if not success then warn("OgHub Sync Error: " .. tostring(err)) end
+        if not success then warn("WhiteRose Sync Error: " .. tostring(err)) end
 
         if ClientState.Connections.Env["AppearanceEnforcer"] then ClientState.Connections.Env["AppearanceEnforcer"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer"] = c.DescendantAdded:Connect(function(child)
@@ -1581,11 +1549,11 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
             -- Character, which used to look identical to a clothing change below
             -- and fired an unwanted (and unsafe) resync. Ignore tools entirely.
             if child:IsA("Tool") or child:FindFirstAncestorWhichIsA("Tool") or child:FindFirstAncestorWhichIsA("Backpack") then return end
-            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then return end
+            if child.Name == "WhiteRose_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then return end
             
             local p = child.Parent
             while p and p ~= game do
-                if p.Name == "OG_HUB_ScriptedItem" or p:FindFirstChild("DrRayScriptedAccessory") or p:GetAttribute("OgHubDestroying") then return end
+                if p.Name == "WhiteRose_ScriptedItem" or p:FindFirstChild("DrRayScriptedAccessory") or p:GetAttribute("WhiteRoseDestroying") then return end
                 p = p.Parent
             end
             
@@ -1599,8 +1567,8 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         
         if ClientState.Connections.Env["AppearanceEnforcer2"] then ClientState.Connections.Env["AppearanceEnforcer2"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer2"] = c.DescendantRemoving:Connect(function(child)
-            if child:GetAttribute("OgHubDestroying") then return end
-            if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then
+            if child:GetAttribute("WhiteRoseDestroying") then return end
+            if child.Name == "WhiteRose_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then
                 requestSync(c)
             end
         end)
@@ -1612,7 +1580,7 @@ if Player.Character then captureColors(Player.Character, true) end
 if ThemeManager and SaveManager then
     ThemeManager:SetLibrary(Library); SaveManager:SetLibrary(Library)
     SaveManager:IgnoreThemeSettings(); SaveManager:SetIgnoreIndexes({ "ToggleUIKeybind" })
-    ThemeManager:SetFolder("OG_HUB_Settings"); SaveManager:SetFolder("OG_HUB_Settings")
+    ThemeManager:SetFolder("WhiteRose_Settings"); SaveManager:SetFolder("WhiteRose_Settings")
     ThemeManager:ApplyToTab(Tabs.Settings); SaveManager:BuildConfigSection(Tabs.Settings)
     
     local oldLoad = SaveManager.Load
