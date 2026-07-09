@@ -126,7 +126,14 @@ end
 
 local function safeDestroy(obj)
     if obj and obj.Parent then 
-        pcall(function() obj:SetAttribute("OgHubDestroying", true) end)
+        pcall(function() 
+            obj:SetAttribute("OgHubDestroying", true)
+            -- Tag every descendant too: Destroy() fires DescendantRemoving once per
+            -- descendant, and only the root object was getting flagged before, so
+            -- children (e.g. the DrRayScriptedAccessory tag) slipped past the
+            -- AppearanceEnforcer2 filter and re-triggered a sync.
+            for _, d in ipairs(obj:GetDescendants()) do d:SetAttribute("OgHubDestroying", true) end
+        end)
         obj:Destroy() 
     end
 end
@@ -411,6 +418,26 @@ local function syncCharacter(char)
     applyClothingItem(char, "Pants", Library.Options.PantsSelector.Value)
     applyClothingItem(char, "TShirt", Library.Options.TShirtSelector.Value)
     applyAnim(char, Library.Options.AnimationPackSelector.Value)
+end
+
+-- Debounced sync request. syncCharacter's own Cleanup step destroys/recreates
+-- scripted items, which fires MORE DescendantAdded/Removing events on the
+-- character; without this guard those events could each schedule another
+-- task.defer(syncCharacter), stacking up until Roblox's re-entrancy limit for
+-- task.defer is exceeded. This collapses any burst of trigger events (a tool
+-- equip, our own rebuild, etc.) into a single, non-overlapping deferred call.
+local syncPending, syncRunning = false, false
+local function requestSync(char)
+    if syncPending or syncRunning or not char then return end
+    syncPending = true
+    task.defer(function()
+        syncPending = false
+        if not char.Parent then return end
+        syncRunning = true
+        local ok, err = pcall(syncCharacter, char)
+        syncRunning = false
+        if not ok then warn("OgHub Sync Error: " .. tostring(err)) end
+    end)
 end
 
 local function fullReset(char)
@@ -944,12 +971,12 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
                 [Enum.Material.Limestone]={"11546415687","10180605826"},
                 [Enum.Material.Marble]={"11546425898","7247387416"},
                 [Enum.Material.Metal]={"11546431794","152572134"},
-                [Enum.Material.Mud]={"11546437412","7263622044"},
+                [Enum.Material.Mud]={"11546437412"},
                 [Enum.Material.Pavement]={"11546440685","8139086777"},
                 [Enum.Material.Pebble]={"11546453485","151776533"},
                 [Enum.Material.Rock]={"11545456858"},
                 [Enum.Material.Salt]={"11546461451","6756014847"},
-                [Enum.Material.Sand]={"11546468464","5873998034"},
+                [Enum.Material.Sand]={"11546468464"},
                 [Enum.Material.Sandstone]={"11546471860","152572221"},
                 [Enum.Material.Slate]={"11546474778"},
                 [Enum.Material.Snow]={"11108916253"},
@@ -1550,11 +1577,15 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         if ClientState.Connections.Env["AppearanceEnforcer"] then ClientState.Connections.Env["AppearanceEnforcer"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer"] = c.DescendantAdded:Connect(function(child)
             if not child.Parent then return end
+            -- Equipping a Tool re-parents it (and its Handle/Mesh/Decal) onto the
+            -- Character, which used to look identical to a clothing change below
+            -- and fired an unwanted (and unsafe) resync. Ignore tools entirely.
+            if child:IsA("Tool") or child:FindFirstAncestorWhichIsA("Tool") or child:FindFirstAncestorWhichIsA("Backpack") then return end
             if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then return end
             
             local p = child.Parent
             while p and p ~= game do
-                if p.Name == "OG_HUB_ScriptedItem" or p:FindFirstChild("DrRayScriptedAccessory") then return end
+                if p.Name == "OG_HUB_ScriptedItem" or p:FindFirstChild("DrRayScriptedAccessory") or p:GetAttribute("OgHubDestroying") then return end
                 p = p.Parent
             end
             
@@ -1562,7 +1593,7 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
             if not child.Parent then return end
             
             if child:IsA("Clothing") or child:IsA("ShirtGraphic") or child:IsA("Accessory") or child:IsA("BodyColors") or child:IsA("Decal") or child:IsA("SpecialMesh") then
-                pcall(function() syncCharacter(c) end)
+                requestSync(c)
             end
         end)
         
@@ -1570,9 +1601,7 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         ClientState.Connections.Env["AppearanceEnforcer2"] = c.DescendantRemoving:Connect(function(child)
             if child:GetAttribute("OgHubDestroying") then return end
             if child.Name == "OG_HUB_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then
-                task.defer(function()
-                    if c.Parent then pcall(function() syncCharacter(c) end) end
-                end)
+                requestSync(c)
             end
         end)
     end)
