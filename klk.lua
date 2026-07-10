@@ -4,6 +4,8 @@
     - Centralized State: All runtime data is now managed in a single table for cleaner resets.
     - Performance: Improved event handling and memory management.
     - All previous fixes (Colors, Headless, SpongeBob, Respawn) are preserved.
+    - Added Custom Name Prefix support for Anonymizer.
+    - Fixed conflict between NameTag and Anonymizer.
 ]]
 
 if getgenv().WhiteRoseLoaded then return end
@@ -697,6 +699,9 @@ end
 -- // NameTag Logic \\ --
 local lastNameTagUpdate = 0
 local function updateNameTag()
+    -- Yield to Anonymizer to prevent infinite text-update loops/conflicts
+    if _G.AnonymizerLoaded then return end
+
     if tick() - lastNameTagUpdate < 0.5 then return end
     lastNameTagUpdate = tick()
 
@@ -708,7 +713,7 @@ local function updateNameTag()
     
     if Player.Character then
         local hum = Player.Character:FindFirstChildOfClass("Humanoid")
-        if hum and not _G.AnonymizerLoaded then
+        if hum then
             local expectedName = tag .. " " .. Player.Name
             if hum.DisplayName ~= expectedName then
                 hum.DisplayName = expectedName
@@ -1179,6 +1184,9 @@ end)
 -- ==========================================
 -- Utility Tab (Buttons)
 -- ==========================================
+
+-- Added Custom Prefix Input for Anonymizer
+Groups.TitanUtil:AddInput("AnonymizerPrefix", { Default = "Player", Numeric = false, Finished = true, Text = "Custom Name Prefix", Placeholder = "Player" })
 Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
 
         if _G.AnonymizerLoaded then
@@ -1194,8 +1202,14 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
         if not success then TextChatService = nil end
         local LocalPlayer = Players.LocalPlayer
 
+        -- Fetch the custom prefix typed in the UI, fallback to "Player" if empty or not found
+        local customPrefix = "Player"
+        if Library.Options.AnonymizerPrefix and Library.Options.AnonymizerPrefix.Value ~= "" then
+            customPrefix = Library.Options.AnonymizerPrefix.Value
+        end
+
         local Config = {
-            AnonymousPrefix = "Player",
+            AnonymousPrefix = customPrefix,
             HideLocalPlayer = true, 
             IgnoredUINames = {"Health", "Stamina", "Money", "Ammo", "Cash", "Credit", "Title", "Description", "Time"}
         }
