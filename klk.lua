@@ -6,6 +6,7 @@
     - All previous fixes (Colors, Headless, SpongeBob, Respawn) are preserved.
     - Added Custom Name Prefix support for Anonymizer.
     - Fixed conflict between NameTag and Anonymizer.
+    - Removed unnecessary game-specific IgnoredUINames list.
 ]]
 
 if getgenv().WhiteRoseLoaded then return end
@@ -130,10 +131,6 @@ local function safeDestroy(obj)
     if obj and obj.Parent then 
         pcall(function() 
             obj:SetAttribute("WhiteRoseDestroying", true)
-            -- Tag every descendant too: Destroy() fires DescendantRemoving once per
-            -- descendant, and only the root object was getting flagged before, so
-            -- children (e.g. the DrRayScriptedAccessory tag) slipped past the
-            -- AppearanceEnforcer2 filter and re-triggered a sync.
             for _, d in ipairs(obj:GetDescendants()) do d:SetAttribute("WhiteRoseDestroying", true) end
         end)
         obj:Destroy() 
@@ -147,7 +144,6 @@ local function captureColors(char, force)
     if not force and next(ClientState.Originals.LimbColors) then return end
     ClientState.Originals.LimbColors = {}
 
-    -- Strategy 1: BodyColors (Best)
     local bc = char:FindFirstChildWhichIsA("BodyColors")
     if bc then
         local m = ClientState.Originals.LimbColors
@@ -157,7 +153,6 @@ local function captureColors(char, force)
         return
     end
 
-    -- Strategy 2: Manual Scan
     for group, names in pairs(CONFIG.LimbMappings) do
         local found = false
         for _, name in ipairs(names) do
@@ -199,25 +194,20 @@ local function resetColors()
     end
 end
 
--- Unified Clothing Handler
 local function applyClothingItem(char, typeStr, itemName)
     if not char then return end
     
-    -- Define class and property map
     local classMap = { Shirt = "Shirt", Pants = "Pants", TShirt = "ShirtGraphic" }
     local propMap = { Shirt = "ShirtTemplate", Pants = "PantsTemplate", TShirt = "Graphic" }
     local className = classMap[typeStr]
     local propName = propMap[typeStr]
     
-    -- Clean up old scripted item
     safeDestroy(ClientState.Scripted[typeStr])
     ClientState.Scripted[typeStr] = nil
 
     local assetId = CONFIG.Clothing[typeStr][itemName]
     
-    -- Handle Original Item Logic
     if typeStr == "TShirt" then
-        -- TShirts are list-based in original storage
         if assetId then
             if #ClientState.Originals.Clothing.TShirts == 0 then
                 for _, c in ipairs(char:GetChildren()) do
@@ -233,14 +223,12 @@ local function applyClothingItem(char, typeStr, itemName)
             newItem.Parent = char
             ClientState.Scripted.TShirt = newItem
         else
-            -- Restore originals
             for _, item in ipairs(ClientState.Originals.Clothing.TShirts) do
                 if item then item.Parent = char end
             end
             ClientState.Originals.Clothing.TShirts = {}
         end
     else
-        -- Shirts and Pants are single items
         if assetId then
             local original = char:FindFirstChildOfClass(className)
             if original and not ClientState.Originals.Clothing[typeStr] then
@@ -256,7 +244,6 @@ local function applyClothingItem(char, typeStr, itemName)
             newItem.Parent = char
             ClientState.Scripted[typeStr] = newItem
         else
-            -- Restore original
             if ClientState.Originals.Clothing[typeStr] then
                 ClientState.Originals.Clothing[typeStr].Parent = char
                 ClientState.Originals.Clothing[typeStr] = nil
@@ -277,7 +264,6 @@ local function updateRainbow(enabled)
             end
         end)
     else
-        -- Revert to UI selected colors
         for group, _ in pairs(CONFIG.LimbMappings) do
             if Library.Options[group.."Color"] then
                 applyColor(Player.Character, group, Library.Options[group.."Color"].Value)
@@ -292,7 +278,6 @@ local function applyAnim(char, packName)
         local anim = char:WaitForChild("Animate", 5)
         if not anim then return end
         
-        -- Cache originals
         if not next(ClientState.Cache.OriginalAnimations) then
             local function getID(obj) return obj and obj.AnimationId end
             local o = {}
@@ -304,16 +289,15 @@ local function applyAnim(char, packName)
                  o.swimidle = getID(anim.swimidle.SwimIdle)
             end)
             ClientState.Cache.OriginalAnimations = o
-            CONFIG.Animations["None"] = o -- Ensure None reverts to captured originals
+            CONFIG.Animations["None"] = o
         end
         
-        if not next(ClientState.Cache.OriginalAnimations) then return end -- Failed to capture
+        if not next(ClientState.Cache.OriginalAnimations) then return end
         
         local pack = CONFIG.Animations[packName]
         if not pack then return end
         
         task.wait(0.1)
-        -- Apply safely
         pcall(function()
             anim.idle.Animation1.AnimationId = pack.idle and pack.idle[1] or ClientState.Cache.OriginalAnimations.idle[1]
             anim.idle.Animation2.AnimationId = pack.idle and pack.idle[2] or ClientState.Cache.OriginalAnimations.idle[2]
@@ -390,23 +374,19 @@ local function addAcc(char, list)
     end
 end
 
--- Master Sync Function
 local function syncCharacter(char)
     if not char then return end
     
-    -- 1. Cleanup
     for _, c in ipairs(char:GetChildren()) do 
         if c:IsA("Accessory") and c:FindFirstChild("DrRayScriptedAccessory") then safeDestroy(c) end 
     end
     
-    -- 2. Toggles
     for name, action in pairs(allActions) do
         if Library.Toggles[name] and Library.Toggles[name].Value then
              if action.type == "Accessory" then addAcc(char, action.action) else pcall(action.action, char, true) end
         end
     end
     
-    -- 3. Colors & Modes
     if Library.Toggles.RainbowMode and Library.Toggles.RainbowMode.Value then
         updateRainbow(true)
     else
@@ -415,19 +395,12 @@ local function syncCharacter(char)
         end
     end
     
-    -- 4. Clothing & Audio
     applyClothingItem(char, "Shirt", Library.Options.ShirtSelector.Value)
     applyClothingItem(char, "Pants", Library.Options.PantsSelector.Value)
     applyClothingItem(char, "TShirt", Library.Options.TShirtSelector.Value)
     applyAnim(char, Library.Options.AnimationPackSelector.Value)
 end
 
--- Debounced sync request. syncCharacter's own Cleanup step destroys/recreates
--- scripted items, which fires MORE DescendantAdded/Removing events on the
--- character; without this guard those events could each schedule another
--- task.defer(syncCharacter), stacking up until Roblox's re-entrancy limit for
--- task.defer is exceeded. This collapses any burst of trigger events (a tool
--- equip, our own rebuild, etc.) into a single, non-overlapping deferred call.
 local syncPending, syncRunning = false, false
 local function requestSync(char)
     if syncPending or syncRunning or not char then return end
@@ -445,25 +418,21 @@ end
 local function fullReset(char)
     if ClientState.Connections.Rainbow then ClientState.Connections.Rainbow:Disconnect() end
     
-    -- Cleanup Scripted Objects
     safeDestroy(ClientState.Scripted.Shirt)
     safeDestroy(ClientState.Scripted.Pants)
     safeDestroy(ClientState.Scripted.TShirt)
     safeDestroy(ClientState.Scripted.HeadlessMesh)
     
     if char then
-        -- Restore Originals
         if ClientState.Originals.Clothing.Shirt then ClientState.Originals.Clothing.Shirt.Parent = char end
         if ClientState.Originals.Clothing.Pants then ClientState.Originals.Clothing.Pants.Parent = char end
         for _, t in ipairs(ClientState.Originals.Clothing.TShirts) do if t then t.Parent = char end end
         for _, a in ipairs(ClientState.Originals.Clothing.Accessories) do if a then a.Parent = char end end
         
-        -- Clean Scripted Accessories
         for _, c in ipairs(char:GetChildren()) do 
             if c:IsA("Accessory") and c:FindFirstChild("DrRayScriptedAccessory") then c:Destroy() end 
         end
         
-        -- Restore Face and Headless
         local head = char:FindFirstChild("Head")
         if head then
             if ClientState.Originals.FaceTexture then
@@ -485,7 +454,6 @@ local function fullReset(char)
     applyAnim(char, "None")
 end
 
--- Actions Definitions (Simplified)
 allActions = {
     ["Headless"] = { category = "Body", type = "Function", action = function(c, e)
         local head = c and c:FindFirstChild("Head")
@@ -699,7 +667,6 @@ end
 -- // NameTag Logic \\ --
 local lastNameTagUpdate = 0
 local function updateNameTag()
-    -- Yield to Anonymizer to prevent infinite text-update loops/conflicts
     if _G.AnonymizerLoaded then return end
 
     if tick() - lastNameTagUpdate < 0.5 then return end
@@ -803,7 +770,6 @@ local Groups = {
     TitanUtil = Tabs.Titan:AddLeftGroupbox("Utility ⚙️")
 }
 
--- Populate Elements
 for name, data in pairs(allActions) do
     if Groups[data.category] then
         Groups[data.category]:AddToggle(name, {Text = name, Default = false, Callback = function(v) 
@@ -841,12 +807,7 @@ end })
 Groups.Tools:AddLabel("Toggle UI"):AddKeyPicker("ToggleUIKeybind", { Default = "RightControl", NoUI = true, Text = "Toggle UI" })
 Library.ToggleKeybind = Library.Options.ToggleUIKeybind
 
-
 -- // Titan Engine Buttons \\ --
--- ==========================================
--- Environment Tab (Buttons)
--- ==========================================
-
 Groups.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false, Callback = function(enabled)
         local Lighting = game:GetService("Lighting")
         local RunService = game:GetService("RunService")
@@ -950,7 +911,6 @@ Groups.TitanEnv:AddSlider("RainIntensitySlider", {
 })
 
 Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
-
         task.spawn(function()
             local workspace = workspace
             local MaterialService = game:GetService("MaterialService")
@@ -1092,7 +1052,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
 end)
 
 Groups.TitanEnv:AddButton("Enforce Universal Sky", function()
-
         local Lighting = game:GetService("Lighting")
         local skyObject = nil
         
@@ -1153,20 +1112,7 @@ Groups.TitanEnv:AddButton("Enforce Universal Sky", function()
         Library:Notify({Title = "System", Content = "Universal Sky applied!", Duration = 3})
 end)
 
--- ==========================================
--- Visuals Tab (Buttons)
--- ==========================================
-local Lighting = game:GetService("Lighting")
-local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
-local currentCamera = Workspace.CurrentCamera
-local renderTarget = currentCamera
-
-local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-
-
 Groups.TitanVis:AddButton("Activate RTX Day Mode ☀️", function()
-
         ensureEffects()
         playSafeTween(Lighting, {
             ClockTime = 14, Brightness = 3,
@@ -1181,14 +1127,8 @@ Groups.TitanVis:AddButton("Activate RTX Day Mode ☀️", function()
         Library:Notify({Title = "Visuals", Content = "RTX Day Mode Applied!", Duration = 3})
 end)
 
--- ==========================================
--- Utility Tab (Buttons)
--- ==========================================
-
--- Added Custom Prefix Input for Anonymizer
 Groups.TitanUtil:AddInput("AnonymizerPrefix", { Default = "Player", Numeric = false, Finished = true, Text = "Custom Name Prefix", Placeholder = "Player" })
 Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
-
         if _G.AnonymizerLoaded then
             Library:Notify({Title = "System", Content = "Anonymizer is already active!", Duration = 3})
             return
@@ -1202,7 +1142,6 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
         if not success then TextChatService = nil end
         local LocalPlayer = Players.LocalPlayer
 
-        -- Fetch the custom prefix typed in the UI, fallback to "Player" if empty or not found
         local customPrefix = "Player"
         if Library.Options.AnonymizerPrefix and Library.Options.AnonymizerPrefix.Value ~= "" then
             customPrefix = Library.Options.AnonymizerPrefix.Value
@@ -1210,8 +1149,7 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
 
         local Config = {
             AnonymousPrefix = customPrefix,
-            HideLocalPlayer = true, 
-            IgnoredUINames = {"Health", "Stamina", "Money", "Ammo", "Cash", "Credit", "Title", "Description", "Time"}
+            HideLocalPlayer = true 
         }
 
         local ACTIVE_GUARDS = setmetatable({}, {__mode = "k"})
@@ -1224,8 +1162,6 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
         local playerCounter = 0
         local playerKnownNames = {}
         local dirtyObjects = {} 
-        local IGNORED_NAMES_LOOKUP = {}
-        for _, name in ipairs(Config.IgnoredUINames) do IGNORED_NAMES_LOOKUP[name] = true end
 
         local function escapePattern(text) return text:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1") end
 
@@ -1319,9 +1255,7 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
         end
 
         local function isWhitelisted(obj)
-            if obj:GetAttribute("IgnoreAnonymizer") == true then return true end
-            if IGNORED_NAMES_LOOKUP[obj.Name] then return true end
-            return false
+            return obj:GetAttribute("IgnoreAnonymizer") == true
         end
 
         UI_HANDLERS.TextLabel = function(obj)
@@ -1492,7 +1426,6 @@ Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
         Library:Notify({Title = "System", Content = "Anonymizer activated successfully!", Duration = 3})
 end)
 
-
 local function resetAllUI()
     for name, _ in pairs(allActions) do if Library.Toggles[name] then Library.Toggles[name]:SetValue(false) end end
     if Library.Toggles.NameTagEnabled then Library.Toggles.NameTagEnabled:SetValue(false) end
@@ -1531,7 +1464,6 @@ Groups.Tools:AddButton("Unload Script", { Text = "Unload Script", DoubleClick = 
     Library:Unload()
 end })
 
--- // Initialization \\ --
 ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     task.spawn(function()
         c:WaitForChild("Humanoid", 3)
@@ -1559,9 +1491,6 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         if ClientState.Connections.Env["AppearanceEnforcer"] then ClientState.Connections.Env["AppearanceEnforcer"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer"] = c.DescendantAdded:Connect(function(child)
             if not child.Parent then return end
-            -- Equipping a Tool re-parents it (and its Handle/Mesh/Decal) onto the
-            -- Character, which used to look identical to a clothing change below
-            -- and fired an unwanted (and unsafe) resync. Ignore tools entirely.
             if child:IsA("Tool") or child:FindFirstAncestorWhichIsA("Tool") or child:FindFirstAncestorWhichIsA("Backpack") then return end
             if child.Name == "WhiteRose_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then return end
             
