@@ -1,7 +1,10 @@
 --[[
-WhiteRose - V4.3 (Fully Fixed)
-- All previous fixes (syntax, trailing spaces, accessories after death, resets, etc.)
-- NEW: Minecraft Textures no longer breaks Terrain (Terrain skipped + no global material override)
+WhiteRose - V4.5 (Fully Fixed)
+- Fixed syntax error (De fault -> Default) and all trailing-space bugs
+- Accessories re-attach after death (retry + fallback attachments)
+- Minecraft Textures no longer breaks Terrain (Terrain skipped, no global material override)
+- R6 rigs: custom animation packs/overrides disabled (fixes broken jump)
+- Safer resets, unload, anonymizer, emotes, and face restoration
 ]]
 
 if getgenv().WhiteRoseLoaded then return end
@@ -182,7 +185,8 @@ local ClientState = {
         AccessoryTemplates = {},
         AccessorySignature = nil,
         AccessoryCharacter = nil,
-        AppliedActions = {}
+        AppliedActions = {},
+        R6AnimWarned = nil
     }
 }
 
@@ -219,6 +223,28 @@ local function safeDestroy(obj)
         end)
         obj:Destroy()
     end
+end
+
+-- // Rig Detection (R6 animation fix) \ --
+local function getRigType(char)
+    if not char then return nil end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        return hum.RigType
+    end
+
+    if char:FindFirstChild("UpperTorso") then
+        return Enum.HumanoidRigType.R15
+    elseif char:FindFirstChild("Torso") then
+        return Enum.HumanoidRigType.R6
+    end
+
+    return nil
+end
+
+local function isR6Rig(char)
+    return getRigType(char) == Enum.HumanoidRigType.R6
 end
 
 -- // Accessory Manager (respawn retry + fallback attachments) \ --
@@ -650,6 +676,7 @@ local function updateRainbow(enabled)
     end
 end
 
+-- // Animation Apply (R6-safe) \ --
 local function applyAnim(char, packName)
     packName = packName or "None"
 
@@ -659,23 +686,40 @@ local function applyAnim(char, packName)
         local anim = char:WaitForChild("Animate", 5)
         if not anim then return end
 
+        -- R6 FIX: R15 packs/overrides cannot play on R6 and break jump/movement.
+        local isR6 = isR6Rig(char)
+
+        if isR6 and packName ~= "None" then
+            packName = "None"
+
+            if not ClientState.Cache.R6AnimWarned then
+                ClientState.Cache.R6AnimWarned = true
+                Library:Notify({
+                    Title = "Animations",
+                    Content = "R6 rig detected - custom animation packs are disabled (R15 animations break R6 jump).",
+                    Duration = 5
+                })
+            end
+        end
+
+        -- Safe capture of original animation IDs (works on R6 and R15 layouts)
         if not next(ClientState.Cache.OriginalAnimations) then
-            local function getID(obj)
-                return obj and obj.AnimationId
+            local function getID(nodeName, childName)
+                local node = anim:FindFirstChild(nodeName)
+                local target = node and node:FindFirstChild(childName)
+                return target and target.AnimationId or nil
             end
 
-            local o = {}
-
-            pcall(function()
-                o.idle = { getID(anim.idle.Animation1), getID(anim.idle.Animation2) }
-                o.walk = getID(anim.walk.WalkAnim)
-                o.run = getID(anim.run.RunAnim)
-                o.jump = getID(anim.jump.JumpAnim)
-                o.fall = getID(anim.fall.FallAnim)
-                o.climb = getID(anim.climb.ClimbAnim)
-                o.swim = getID(anim.swim.Swim)
-                o.swimidle = getID(anim.swimidle.SwimIdle)
-            end)
+            local o = {
+                idle = { getID("idle", "Animation1"), getID("idle", "Animation2") },
+                walk = getID("walk", "WalkAnim"),
+                run = getID("run", "RunAnim"),
+                jump = getID("jump", "JumpAnim"),
+                fall = getID("fall", "FallAnim"),
+                climb = getID("climb", "ClimbAnim"),
+                swim = getID("swim", "Swim"),
+                swimidle = getID("swimidle", "SwimIdle")
+            }
 
             ClientState.Cache.OriginalAnimations = o
             CONFIG.Animations["None"] = o
@@ -684,32 +728,44 @@ local function applyAnim(char, packName)
         if not next(ClientState.Cache.OriginalAnimations) then return end
 
         local pack = {}
-
         for animationName, animationId in pairs(CONFIG.Animations[packName] or {}) do
             pack[animationName] = animationId
         end
 
-        for _, override in pairs(CONFIG.AnimationOverrides) do
-            if getToggleValue(override.key) then
-                for animationName, animationId in pairs(override.values) do
-                    pack[animationName] = animationId
+        -- Overrides are R15-only
+        if not isR6 then
+            for _, override in pairs(CONFIG.AnimationOverrides) do
+                local toggle = Library.Toggles[override.key]
+                if toggle and toggle.Value then
+                    for animationName, animationId in pairs(override.values) do
+                        pack[animationName] = animationId
+                    end
                 end
             end
         end
 
         task.wait(0.1)
 
-        pcall(function()
-            anim.idle.Animation1.AnimationId = pack.idle and pack.idle[1] or ClientState.Cache.OriginalAnimations.idle[1]
-            anim.idle.Animation2.AnimationId = pack.idle and pack.idle[2] or ClientState.Cache.OriginalAnimations.idle[2]
-            anim.walk.WalkAnim.AnimationId = pack.walk or ClientState.Cache.OriginalAnimations.walk
-            anim.run.RunAnim.AnimationId = pack.run or ClientState.Cache.OriginalAnimations.run
-            anim.jump.JumpAnim.AnimationId = pack.jump or ClientState.Cache.OriginalAnimations.jump
-            anim.fall.FallAnim.AnimationId = pack.fall or ClientState.Cache.OriginalAnimations.fall
-            anim.climb.ClimbAnim.AnimationId = pack.climb or ClientState.Cache.OriginalAnimations.climb
-            anim.swim.Swim.AnimationId = pack.swim or ClientState.Cache.OriginalAnimations.swim
-            anim.swimidle.SwimIdle.AnimationId = pack.swimidle or ClientState.Cache.OriginalAnimations.swimidle
-        end)
+        local function setID(nodeName, childName, value)
+            if not value then return end
+            local node = anim:FindFirstChild(nodeName)
+            local target = node and node:FindFirstChild(childName)
+            if target then
+                target.AnimationId = value
+            end
+        end
+
+        local orig = ClientState.Cache.OriginalAnimations
+
+        setID("idle", "Animation1", (pack.idle and pack.idle[1]) or (orig.idle and orig.idle[1]))
+        setID("idle", "Animation2", (pack.idle and pack.idle[2]) or (orig.idle and orig.idle[2]))
+        setID("walk", "WalkAnim", pack.walk or orig.walk)
+        setID("run", "RunAnim", pack.run or orig.run)
+        setID("jump", "JumpAnim", pack.jump or orig.jump)
+        setID("fall", "FallAnim", pack.fall or orig.fall)
+        setID("climb", "ClimbAnim", pack.climb or orig.climb)
+        setID("swim", "Swim", pack.swim or orig.swim)
+        setID("swimidle", "SwimIdle", pack.swimidle or orig.swimidle)
     end)
 end
 
