@@ -64,13 +64,19 @@ local CONFIG = {
         RightLeg = { "RightUpperLeg", "RightLowerLeg", "RightFoot", "Right Leg" },
     },
     Clothing = {
-        Shirt = { ["None"] = nil },
-        Pants = { ["None"] = nil },
-        TShirt = { ["None"] = nil, ["Oh Noez!"] = "http://www.roblox.com/asset/?id=1641286", ["Spread The Lulz!"] = "http://www.roblox.com/asset/?id=24774765" }
+        Shirt = { ["None"] = nil, ["Remove"] = false, ["Yuno Gasai Mirai Nikki"] = 6412908981 },
+        Pants = { ["None"] = nil, ["Remove"] = false, ["Yuno Gasai Mirai Nikki"] = 6412913951, ["Yuno Gasai Anime Black Dress V2"] = 14696725708 },
+        TShirt = { ["None"] = nil, ["Remove"] = false, ["Oh Noez!"] = "http://www.roblox.com/asset/?id=1641286", ["Spread The Lulz!"] = "http://www.roblox.com/asset/?id=24774765" }
     },
     Animations = {
         ["None"] = {},
         ["Vampire"] = { idle = { "rbxassetid://1083445855", "rbxassetid://1083450166" }, walk = "rbxassetid://1083473930", run = "rbxassetid://1083462077", jump = "rbxassetid://1083455352", fall = "rbxassetid://1083443587", climb = "rbxassetid://1083439238", swim = "rbxassetid://1083222527", swimidle = "rbxassetid://1083225406" }
+    },
+    AnimationOverrides = {
+        ["Robot Swim"] = { key = "RobotSwim", values = { swim = "rbxassetid://10921253142", swimidle = "rbxassetid://10921253767" } },
+        ["Mage Fall"] = { key = "MageFall", values = { fall = "rbxassetid://10921148939" } },
+        ["Elder Jump"] = { key = "ElderJump", values = { jump = "rbxassetid://10921107367" } },
+        ["Toy Run"] = { key = "ToyRun", values = { run = "rbxassetid://10921306285" } }
     },
     Emotes = {
         ["None"] = nil,
@@ -85,7 +91,6 @@ local CONFIG = {
 }
 
 -- // Client State Management \\ --
-local removedHairStorage = {}
 local allActions
 local ClientState = {
     Originals = {
@@ -112,20 +117,17 @@ local ClientState = {
         EmoteStop = nil
     },
     Cache = {
-        OriginalAnimations = {}
+        OriginalAnimations = {},
+        ClothingTemplates = {},
+        AccessoryTemplates = {},
+        AccessorySignature = nil,
+        AccessoryCharacter = nil,
+        AppliedActions = {}
     }
 }
 
 -- // Utility Functions \\ --
 local function getKeys(t) local k={}; for i in pairs(t) do table.insert(k,i) end; table.sort(k); return k end
-
-local function weld(p0, p1, c0, c1)
-    local w = Instance.new("Weld"); w.Part0, w.Part1, w.C0, w.C1 = p0, p1, c0, c1; w.Parent = p0; return w
-end
-
-local function findAtt(root, name)
-    for _, d in ipairs(root:GetDescendants()) do if d:IsA("Attachment") and d.Name == name then return d end end
-end
 
 local function safeDestroy(obj)
     if obj and obj.Parent then 
@@ -135,6 +137,121 @@ local function safeDestroy(obj)
         end)
         obj:Destroy() 
     end
+end
+
+local SCRIPTED_ACCESSORY_ATTRIBUTE = "WhiteRoseScriptedAccessory"
+
+local AccessoryManager = {}
+
+local function weldAccessory(character, accessory)
+    local handle = accessory:FindFirstChild("Handle")
+    local handleAttachment = handle and handle:FindFirstChildWhichIsA("Attachment")
+    if not handleAttachment then return false end
+
+    local characterAttachment
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("Attachment") and descendant.Name == handleAttachment.Name then
+            characterAttachment = descendant
+            break
+        end
+    end
+
+    local targetPart = characterAttachment and characterAttachment.Parent
+    if not targetPart or not targetPart:IsA("BasePart") then return false end
+
+    accessory.Parent = character
+    handle.CFrame = targetPart.CFrame * characterAttachment.CFrame * handleAttachment.CFrame:Inverse()
+
+    local weld = Instance.new("Weld")
+    weld.Name = "WhiteRoseAccessoryWeld"
+    weld.Part0 = targetPart
+    weld.Part1 = handle
+    weld.C0 = characterAttachment.CFrame
+    weld.C1 = handleAttachment.CFrame
+    weld.Parent = targetPart
+
+    local weldReference = Instance.new("ObjectValue")
+    weldReference.Name = "WhiteRoseAccessoryWeld"
+    weldReference.Value = weld
+    weldReference.Parent = accessory
+    return true
+end
+
+function AccessoryManager:Clear(character)
+    if not character then return end
+
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Accessory") and child:GetAttribute(SCRIPTED_ACCESSORY_ATTRIBUTE) then
+            local weldReference = child:FindFirstChild("WhiteRoseAccessoryWeld")
+            if weldReference and weldReference:IsA("ObjectValue") then
+                safeDestroy(weldReference.Value)
+            end
+            safeDestroy(child)
+        end
+    end
+end
+
+function AccessoryManager:Add(character, assetId)
+    if not character then return nil end
+
+    local template = ClientState.Cache.AccessoryTemplates[assetId]
+    if not template then
+        local ok, objects = pcall(game.GetObjects, game, "rbxassetid://" .. tostring(assetId))
+        local asset = ok and objects and objects[1]
+        template = asset and (asset:IsA("Accessory") and asset or asset:FindFirstChildWhichIsA("Accessory", true))
+        if template then ClientState.Cache.AccessoryTemplates[assetId] = template end
+    end
+
+    if not template then
+        warn("WhiteRose: Could not load accessory " .. tostring(assetId))
+        return nil
+    end
+
+    local accessory = template:Clone()
+    accessory:SetAttribute(SCRIPTED_ACCESSORY_ATTRIBUTE, true)
+    if not weldAccessory(character, accessory) then
+        warn("WhiteRose: Could not attach accessory " .. tostring(assetId))
+        safeDestroy(accessory)
+        return nil
+    end
+    return accessory
+end
+
+function AccessoryManager:AddAll(character, accessoryGroups)
+    for _, assetIds in pairs(accessoryGroups) do
+        for _, assetId in ipairs(assetIds) do
+            self:Add(character, assetId)
+        end
+    end
+end
+
+function AccessoryManager:Sync(character, accessoryGroups)
+    local assetIds = {}
+    for _, ids in pairs(accessoryGroups) do
+        for _, assetId in ipairs(ids) do table.insert(assetIds, tostring(assetId)) end
+    end
+    table.sort(assetIds)
+
+    local signature = table.concat(assetIds, ",")
+    if ClientState.Cache.AccessoryCharacter == character and ClientState.Cache.AccessorySignature == signature then
+        return
+    end
+
+    self:Clear(character)
+    self:AddAll(character, accessoryGroups)
+    ClientState.Cache.AccessoryCharacter = character
+    ClientState.Cache.AccessorySignature = signature
+end
+
+local function isScriptedAccessory(instance)
+    local current = instance
+    while current and current ~= game do
+        if current:IsA("Accessory") and current:GetAttribute(SCRIPTED_ACCESSORY_ATTRIBUTE) then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
 end
 
 -- // Core Logic Functions \\ --
@@ -194,62 +311,129 @@ local function resetColors()
     end
 end
 
-local function applyClothingItem(char, typeStr, itemName)
-    if not char then return end
-    
-    local classMap = { Shirt = "Shirt", Pants = "Pants", TShirt = "ShirtGraphic" }
-    local propMap = { Shirt = "ShirtTemplate", Pants = "PantsTemplate", TShirt = "Graphic" }
-    local className = classMap[typeStr]
-    local propName = propMap[typeStr]
-    
-    safeDestroy(ClientState.Scripted[typeStr])
-    ClientState.Scripted[typeStr] = nil
+local function resolveClothingTemplate(assetId, className, propertyName)
+    if type(assetId) ~= "number" then return assetId end
+
+    local cacheKey = className .. ":" .. assetId
+    local cached = ClientState.Cache.ClothingTemplates[cacheKey]
+    if cached then return cached end
+
+    local ok, objects = pcall(game.GetObjects, game, "rbxassetid://" .. assetId)
+    local catalogItem = ok and objects and objects[1]
+    local clothing = catalogItem and (catalogItem:IsA(className) and catalogItem or catalogItem:FindFirstChildWhichIsA(className, true))
+    local template = clothing and clothing[propertyName]
+    if template then ClientState.Cache.ClothingTemplates[cacheKey] = template end
+    return template
+end
+
+local ClothingManager = { Hidden = {} }
+
+local clothingTypes = {
+    Shirt = { className = "Shirt", propertyName = "ShirtTemplate" },
+    Pants = { className = "Pants", propertyName = "PantsTemplate" },
+    TShirt = { className = "ShirtGraphic", propertyName = "Graphic" }
+}
+
+local function restoreOriginalClothing(character, typeStr)
+    local originals = ClientState.Originals.Clothing
+    if typeStr == "TShirt" then
+        for _, item in ipairs(originals.TShirts) do
+            if item then item.Parent = character end
+        end
+        originals.TShirts = {}
+        return
+    end
+
+    local item = originals[typeStr]
+    if item then item.Parent = character end
+    originals[typeStr] = nil
+end
+
+local function storeOriginalClothing(character, typeStr, className)
+    local originals = ClientState.Originals.Clothing
+    if typeStr == "TShirt" then
+        if #originals.TShirts > 0 then return end
+        for _, item in ipairs(character:GetChildren()) do
+            if item:IsA(className) and item ~= ClientState.Scripted.TShirt then
+                table.insert(originals.TShirts, item)
+                item.Parent = nil
+            end
+        end
+        return
+    end
+
+    local original = originals[typeStr] or character:FindFirstChildOfClass(className)
+    if original then
+        originals[typeStr] = original
+        original.Parent = nil
+    end
+end
+
+function ClothingManager:Apply(character, typeStr, itemName)
+    if not character then return end
+    local definition = clothingTypes[typeStr]
+    if not definition then return end
+    if self.Hidden[typeStr] then return end
 
     local assetId = CONFIG.Clothing[typeStr][itemName]
-    
-    if typeStr == "TShirt" then
-        if assetId then
-            if #ClientState.Originals.Clothing.TShirts == 0 then
-                for _, c in ipairs(char:GetChildren()) do
-                     if c:IsA("ShirtGraphic") and c ~= ClientState.Scripted.TShirt then
-                        table.insert(ClientState.Originals.Clothing.TShirts, c)
-                        c.Parent = nil
-                     end
-                end
-            end
-            local newItem = Instance.new("ShirtGraphic")
-            newItem.Name = "WhiteRose_ScriptedItem"
-            newItem.Graphic = assetId
-            newItem.Parent = char
-            ClientState.Scripted.TShirt = newItem
-        else
-            for _, item in ipairs(ClientState.Originals.Clothing.TShirts) do
-                if item then item.Parent = char end
-            end
-            ClientState.Originals.Clothing.TShirts = {}
-        end
-    else
-        if assetId then
-            local original = char:FindFirstChildOfClass(className)
-            if original and not ClientState.Originals.Clothing[typeStr] then
-                ClientState.Originals.Clothing[typeStr] = original
-            end
-            if ClientState.Originals.Clothing[typeStr] then
-                ClientState.Originals.Clothing[typeStr].Parent = nil
-            end
-            
-            local newItem = Instance.new(className)
-            newItem.Name = "WhiteRose_ScriptedItem"
-            newItem[propName] = assetId
-            newItem.Parent = char
-            ClientState.Scripted[typeStr] = newItem
-        else
-            if ClientState.Originals.Clothing[typeStr] then
-                ClientState.Originals.Clothing[typeStr].Parent = char
-                ClientState.Originals.Clothing[typeStr] = nil
-            end
-        end
+    if itemName == "Remove" then
+        safeDestroy(ClientState.Scripted[typeStr])
+        ClientState.Scripted[typeStr] = nil
+        storeOriginalClothing(character, typeStr, definition.className)
+        return
     end
+
+    local template = resolveClothingTemplate(assetId, definition.className, definition.propertyName)
+    local current = ClientState.Scripted[typeStr]
+    if template and current and current.Parent == character and current[definition.propertyName] == template then
+        return
+    end
+
+    safeDestroy(current)
+    ClientState.Scripted[typeStr] = nil
+
+    if not template then
+        if assetId then warn("WhiteRose: Could not load " .. typeStr .. " asset " .. tostring(assetId)) end
+        restoreOriginalClothing(character, typeStr)
+        return
+    end
+
+    storeOriginalClothing(character, typeStr, definition.className)
+    local item = Instance.new(definition.className)
+    item.Name = "WhiteRose_ScriptedItem"
+    item[definition.propertyName] = template
+    item.Parent = character
+    ClientState.Scripted[typeStr] = item
+end
+
+function ClothingManager:Hide(character, typeStr)
+    local definition = clothingTypes[typeStr]
+    if not character or not definition or self.Hidden[typeStr] then return end
+
+    safeDestroy(ClientState.Scripted[typeStr])
+    ClientState.Scripted[typeStr] = nil
+    storeOriginalClothing(character, typeStr, definition.className)
+    self.Hidden[typeStr] = true
+end
+
+function ClothingManager:Show(character, typeStr)
+    if not self.Hidden[typeStr] then return end
+    self.Hidden[typeStr] = nil
+    restoreOriginalClothing(character, typeStr)
+end
+
+function ClothingManager:Restore(character)
+    if not character then return end
+    for typeStr in pairs(clothingTypes) do
+        safeDestroy(ClientState.Scripted[typeStr])
+        ClientState.Scripted[typeStr] = nil
+        restoreOriginalClothing(character, typeStr)
+        self.Hidden[typeStr] = nil
+    end
+end
+
+local function applyClothingItem(char, typeStr, itemName)
+    ClothingManager:Apply(char, typeStr, itemName)
 end
 
 local function updateRainbow(enabled)
@@ -294,7 +478,18 @@ local function applyAnim(char, packName)
         
         if not next(ClientState.Cache.OriginalAnimations) then return end
         
-        local pack = CONFIG.Animations[packName]
+        local pack = {}
+        for animationName, animationId in pairs(CONFIG.Animations[packName] or {}) do
+            pack[animationName] = animationId
+        end
+        for _, override in pairs(CONFIG.AnimationOverrides) do
+            local toggle = Library.Toggles[override.key]
+            if toggle and toggle.Value then
+                for animationName, animationId in pairs(override.values) do
+                    pack[animationName] = animationId
+                end
+            end
+        end
         if not pack then return end
         
         task.wait(0.1)
@@ -344,48 +539,30 @@ local function playEmote(char, emoteName)
     end)
 end
 
-local function addAcc(char, list)
+local function syncCharacter(char)
     if not char then return end
-    local head = char:FindFirstChild("Head")
-    local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
-    
-    for partName, ids in pairs(list) do
-        local target = (partName == "Head") and head or torso
-        if target then
-            for _, id in ipairs(ids) do
-                local success, result = pcall(function() return game:GetObjects("rbxassetid://"..id)[1] end)
-                if success and result then
-                    local tag = Instance.new("BoolValue", result); tag.Name = "DrRayScriptedAccessory"
-                    result.Parent = workspace
-                    local handle = result:FindFirstChild("Handle")
-                    if handle then
-                        local att = handle:FindFirstChildOfClass("Attachment")
-                        local targetAtt = att and findAtt(target, att.Name)
-                        if targetAtt then
-                            weld(target, handle, targetAtt.CFrame, att.CFrame)
-                        else
-                            weld(target, handle, CFrame.new(), CFrame.new())
-                        end
+
+    local activeAccessories = { Auto = {} }
+    applyClothingItem(char, "Shirt", Library.Options.ShirtSelector.Value)
+    applyClothingItem(char, "Pants", Library.Options.PantsSelector.Value)
+    applyClothingItem(char, "TShirt", Library.Options.TShirtSelector.Value)
+
+    for name, action in pairs(allActions) do
+        if Library.Toggles[name] and Library.Toggles[name].Value then
+            if action.type == "Accessory" then
+                for _, assetIds in pairs(action.action) do
+                    for _, assetId in ipairs(assetIds) do
+                        table.insert(activeAccessories.Auto, assetId)
                     end
-                    result.Parent = char
                 end
+            elseif not ClientState.Cache.AppliedActions[name] then
+                pcall(action.action, char, true)
+                ClientState.Cache.AppliedActions[name] = true
             end
         end
     end
-end
 
-local function syncCharacter(char)
-    if not char then return end
-    
-    for _, c in ipairs(char:GetChildren()) do 
-        if c:IsA("Accessory") and c:FindFirstChild("DrRayScriptedAccessory") then safeDestroy(c) end 
-    end
-    
-    for name, action in pairs(allActions) do
-        if Library.Toggles[name] and Library.Toggles[name].Value then
-             if action.type == "Accessory" then addAcc(char, action.action) else pcall(action.action, char, true) end
-        end
-    end
+    AccessoryManager:Sync(char, activeAccessories)
     
     if Library.Toggles.RainbowMode and Library.Toggles.RainbowMode.Value then
         updateRainbow(true)
@@ -395,9 +572,6 @@ local function syncCharacter(char)
         end
     end
     
-    applyClothingItem(char, "Shirt", Library.Options.ShirtSelector.Value)
-    applyClothingItem(char, "Pants", Library.Options.PantsSelector.Value)
-    applyClothingItem(char, "TShirt", Library.Options.TShirtSelector.Value)
     applyAnim(char, Library.Options.AnimationPackSelector.Value)
 end
 
@@ -416,22 +590,22 @@ local function requestSync(char)
 end
 
 local function fullReset(char)
-    if ClientState.Connections.Rainbow then ClientState.Connections.Rainbow:Disconnect() end
+    if ClientState.Connections.Rainbow then
+        ClientState.Connections.Rainbow:Disconnect()
+        ClientState.Connections.Rainbow = nil
+    end
+    stopEmote()
+    ClientState.Cache.AccessorySignature = nil
+    ClientState.Cache.AccessoryCharacter = nil
+    ClientState.Cache.AppliedActions = {}
     
-    safeDestroy(ClientState.Scripted.Shirt)
-    safeDestroy(ClientState.Scripted.Pants)
-    safeDestroy(ClientState.Scripted.TShirt)
     safeDestroy(ClientState.Scripted.HeadlessMesh)
     
     if char then
-        if ClientState.Originals.Clothing.Shirt then ClientState.Originals.Clothing.Shirt.Parent = char end
-        if ClientState.Originals.Clothing.Pants then ClientState.Originals.Clothing.Pants.Parent = char end
-        for _, t in ipairs(ClientState.Originals.Clothing.TShirts) do if t then t.Parent = char end end
+        ClothingManager:Restore(char)
         for _, a in ipairs(ClientState.Originals.Clothing.Accessories) do if a then a.Parent = char end end
         
-        for _, c in ipairs(char:GetChildren()) do 
-            if c:IsA("Accessory") and c:FindFirstChild("DrRayScriptedAccessory") then c:Destroy() end 
-        end
+        AccessoryManager:Clear(char)
         
         local head = char:FindFirstChild("Head")
         if head then
@@ -510,18 +684,13 @@ allActions = {
     ["Naked"] = { category = "Body", type = "Function", action = function(c, e)
         if not c then return end
         if e then
-             local s = c:FindFirstChildOfClass("Shirt"); if s then ClientState.Originals.Clothing.Shirt = s; s.Parent = nil end
-             local p = c:FindFirstChildOfClass("Pants"); if p then ClientState.Originals.Clothing.Pants = p; p.Parent = nil end
-             for _, item in ipairs(c:GetChildren()) do
-                if item:IsA("ShirtGraphic") and item ~= ClientState.Scripted.TShirt then
-                    table.insert(ClientState.Originals.Clothing.TShirts, item); item.Parent = nil
-                end
-             end
+            ClothingManager:Hide(c, "Shirt")
+            ClothingManager:Hide(c, "Pants")
+            ClothingManager:Hide(c, "TShirt")
         else
-            if ClientState.Originals.Clothing.Shirt then ClientState.Originals.Clothing.Shirt.Parent = c end
-            if ClientState.Originals.Clothing.Pants then ClientState.Originals.Clothing.Pants.Parent = c end
-            for _, t in ipairs(ClientState.Originals.Clothing.TShirts) do t.Parent = c end
-            ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {} }
+            ClothingManager:Show(c, "Shirt")
+            ClothingManager:Show(c, "Pants")
+            ClothingManager:Show(c, "TShirt")
         end
     end},
     ["Remove Hair"] = { category = "Body", type = "Function", action = function(c, e)
@@ -578,38 +747,32 @@ allActions = {
     ["Remove Original Shirt"] = { category = "Outfit", type = "Function", action = function(c,e) 
         if not c then return end
         if e then 
-            local s = c:FindFirstChildOfClass("Shirt")
-            if s and not ClientState.Originals.Clothing.Shirt then ClientState.Originals.Clothing.Shirt = s; s.Parent = nil end
+            ClothingManager:Hide(c, "Shirt")
         else
-            if ClientState.Originals.Clothing.Shirt then ClientState.Originals.Clothing.Shirt.Parent = c; ClientState.Originals.Clothing.Shirt = nil end
+            ClothingManager:Show(c, "Shirt")
         end
     end},
     ["Remove Original Pants"] = { category = "Outfit", type = "Function", action = function(c,e)
         if not c then return end
         if e then 
-            local s = c:FindFirstChildOfClass("Pants")
-            if s and not ClientState.Originals.Clothing.Pants then ClientState.Originals.Clothing.Pants = s; s.Parent = nil end
+            ClothingManager:Hide(c, "Pants")
         else
-            if ClientState.Originals.Clothing.Pants then ClientState.Originals.Clothing.Pants.Parent = c; ClientState.Originals.Clothing.Pants = nil end
+            ClothingManager:Show(c, "Pants")
         end
     end},
     ["Remove Original T-Shirts"] = { category = "Outfit", type = "Function", action = function(c,e)
         if not c then return end
         if e then 
-             for _, item in ipairs(c:GetChildren()) do
-                if item:IsA("ShirtGraphic") and item ~= ClientState.Scripted.TShirt then
-                    table.insert(ClientState.Originals.Clothing.TShirts, item); item.Parent = nil
-                end
-             end
+            ClothingManager:Hide(c, "TShirt")
         else
-             for _, t in ipairs(ClientState.Originals.Clothing.TShirts) do t.Parent = c end; ClientState.Originals.Clothing.TShirts = {}
+            ClothingManager:Show(c, "TShirt")
         end
     end},
     ["Remove Original Accessories"] = { category = "Outfit", type = "Function", action = function(c,e)
         if not c then return end
         if e then 
              for _, item in ipairs(c:GetChildren()) do
-                if item:IsA("Accessory") and not item:FindFirstChild("DrRayScriptedAccessory") then
+                if item:IsA("Accessory") and not item:GetAttribute(SCRIPTED_ACCESSORY_ATTRIBUTE) then
                     table.insert(ClientState.Originals.Clothing.Accessories, item); item.Parent = nil
                 end
              end
@@ -619,7 +782,16 @@ allActions = {
     end},
     ["Valkyrie Helm"] = { category = "Accessories", type = "Accessory", action = { Head = { 1365767 } } },
     ["Wings of Duality"] = { category = "Accessories", type = "Accessory", action = { Torso = { 493489765 } } },
-    ["Dominus Praefectus"] = { category = "Accessories", type = "Accessory", action = { Head = { 527365852 } } },
+    ["Lowered Hair Ear Tufts (Pink)"] = { category = "Accessories", type = "Accessory", action = { Head = { 8275341781 } } },
+    ["Y2K Long Wavy Pigtails in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 11364071979 } } },
+    ["Middle Swept Spiky Bangs in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 9008209306 } } },
+    ["Celebrity Bling"] = { category = "Accessories", type = "Accessory", action = { Head = { 6239323549 } } },
+    ["Red Angry Anime Hitmarker Filter"] = { category = "Accessories", type = "Accessory", action = { Head = { 9922633567 } } },
+    ["Red Goth Axe"] = { category = "Accessories", type = "Accessory", action = { Torso = { 11386880969 } } },
+    ["Katana [Handheld]"] = { category = "Accessories", type = "Accessory", action = { Auto = { 12380877175 } } },
+    ["Wispy Willow Pigtails in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 12394572381 } } },
+    ["Straight Bangs (Pink)"] = { category = "Accessories", type = "Accessory", action = { Head = { 12850356248 } } },
+    ["Black Cutesy Side Ruffles 3.0"] = { category = "Accessories", type = "Accessory", action = { Torso = { 12366756122 } } },
     ["Fiery Horns of the Netherworld"] = { category = "Accessories", type = "Accessory", action = { Head = { 215718515 } } },
     ["Blackvalk"] = { category = "Accessories", type = "Accessory", action = { Head = { 124730194 } } },
     ["Frozen Horns of the Frigid Planes"] = { category = "Accessories", type = "Accessory", action = { Head = { 74891470 } } },
@@ -773,6 +945,7 @@ local Groups = {
 for name, data in pairs(allActions) do
     if Groups[data.category] then
         Groups[data.category]:AddToggle(name, {Text = name, Default = false, Callback = function(v) 
+            ClientState.Cache.AppliedActions[name] = nil
             if not v and data.type == "Function" then pcall(data.action, Player.Character, false) end
             syncCharacter(Player.Character) 
         end})
@@ -793,6 +966,16 @@ Groups.Clothing:AddDropdown("ShirtSelector", { Values = getKeys(CONFIG.Clothing.
 Groups.Clothing:AddDropdown("PantsSelector", { Values = getKeys(CONFIG.Clothing.Pants), Default = "None", Text = "Pants", Callback = function(s) applyClothingItem(Player.Character, "Pants", s) end })
 Groups.Clothing:AddDropdown("TShirtSelector", { Values = getKeys(CONFIG.Clothing.TShirt), Default = "None", Text = "T-Shirt", Callback = function(s) applyClothingItem(Player.Character, "TShirt", s) end })
 Groups.Animation:AddDropdown("AnimationPackSelector", { Values = getKeys(CONFIG.Animations), Default = "None", Text = "Animation Pack", Callback = function(p) applyAnim(Player.Character, p) end })
+for name, override in pairs(CONFIG.AnimationOverrides) do
+    Groups.Animation:AddToggle(override.key, {
+        Text = name,
+        Default = false,
+        Callback = function()
+            local packOption = Library.Options.AnimationPackSelector
+            applyAnim(Player.Character, packOption and packOption.Value or "None")
+        end
+    })
+end
 
 Groups.Emotes:AddDropdown("EmoteSelector", { Values = getKeys(CONFIG.Emotes), Default = "None", Text = "Select Emote" })
 Groups.Emotes:AddButton("Play Emote ▶️", function() playEmote(Player.Character, Library.Options.EmoteSelector.Value) end)
@@ -1433,6 +1616,9 @@ local function resetAllUI()
     Library.Options.PantsSelector:SetValue("None")
     Library.Options.TShirtSelector:SetValue("None")
     Library.Options.AnimationPackSelector:SetValue("None")
+    for _, override in pairs(CONFIG.AnimationOverrides) do
+        if Library.Toggles[override.key] then Library.Toggles[override.key]:SetValue(false) end
+    end
     Library.Options.EmoteSelector:SetValue("None")
     stopEmote()
     Library.Toggles.RainbowMode:SetValue(false)
@@ -1483,6 +1669,10 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         ClientState.Originals.FaceTexture = nil
         ClientState.Originals.Sound = { Id = nil, Pitch = nil }
         ClientState.Originals.Headless = nil
+        ClientState.Cache.OriginalAnimations = {}
+        ClientState.Cache.AccessorySignature = nil
+        ClientState.Cache.AccessoryCharacter = nil
+        ClientState.Cache.AppliedActions = {}
         
         captureColors(c, true)
         local success, err = pcall(function() syncCharacter(c) end)
@@ -1490,13 +1680,13 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
 
         if ClientState.Connections.Env["AppearanceEnforcer"] then ClientState.Connections.Env["AppearanceEnforcer"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer"] = c.DescendantAdded:Connect(function(child)
-            if not child.Parent then return end
+            if not child.Parent or child:GetAttribute("WhiteRoseRefreshing") then return end
             if child:IsA("Tool") or child:FindFirstAncestorWhichIsA("Tool") or child:FindFirstAncestorWhichIsA("Backpack") then return end
-            if child.Name == "WhiteRose_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then return end
+            if child.Name == "WhiteRose_ScriptedItem" or isScriptedAccessory(child) then return end
             
             local p = child.Parent
             while p and p ~= game do
-                if p.Name == "WhiteRose_ScriptedItem" or p:FindFirstChild("DrRayScriptedAccessory") or p:GetAttribute("WhiteRoseDestroying") then return end
+                if p.Name == "WhiteRose_ScriptedItem" or isScriptedAccessory(p) or p:GetAttribute("WhiteRoseDestroying") then return end
                 p = p.Parent
             end
             
@@ -1510,10 +1700,8 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
         
         if ClientState.Connections.Env["AppearanceEnforcer2"] then ClientState.Connections.Env["AppearanceEnforcer2"]:Disconnect() end
         ClientState.Connections.Env["AppearanceEnforcer2"] = c.DescendantRemoving:Connect(function(child)
-            if child:GetAttribute("WhiteRoseDestroying") then return end
-            if child.Name == "WhiteRose_ScriptedItem" or child.Name == "DrRayScriptedAccessory" or child:FindFirstChild("DrRayScriptedAccessory") then
-                requestSync(c)
-            end
+            if child:GetAttribute("WhiteRoseDestroying") or child:GetAttribute("WhiteRoseRefreshing") then return end
+            if child.Name == "WhiteRose_ScriptedItem" or isScriptedAccessory(child) then return end
         end)
     end)
 end)
