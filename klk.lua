@@ -1,15 +1,13 @@
 --[[
-WhiteRose - V4.9
-- FIXED: "Cannot un-crouch cause of this part" spam — attached accessories are now
-  purely cosmetic (no collide/touch/query, massless, unanchored)
-- Anonymizer removed (standalone script); NameTag still respects _G.AnonymizerLoaded
-- No "Red Angry Anime Hitmarker Filter"
-- Accessories: manual weld (no AddAccessory), R6 fallback attachments, respawn retry
-- Hairs: Vinsmoke Blonde TS Boy Hair + Sanji (✔) (automatic placement)
-- Accessories: Sanji Ears (PTS) / Sanji mask / Black Folded Collar / Tailcoat Addon
-- Sanji (+) Shirt / Sanji (-) Pants (offsale-safe direct templates)
-- Minecraft Textures no longer breaks Terrain
-- R6 rigs: custom animation packs disabled (fixes broken jump)
+WhiteRose - V5.0 (Leak-clean final)
+- LEAK FIX: activeTweens uses weak keys + drops finished tweens
+- LEAK FIX: playEmote destroys the Animation descriptor after loading
+- LEAK FIX: Minecraft queue drain fully pcall-wrapped (flag can never stick)
+- Cosmetic-only accessories (no "Cannot un-crouch" spam)
+- Anonymizer removed (standalone); NameTag still respects _G.AnonymizerLoaded
+- Accessories/hairs: manual weld, R6 fallbacks, respawn retry, auto placement
+- Sanji (+) Shirt / Sanji (-) Pants; Sanji Ears / Sanji mask / Collar / Tailcoat
+- Terrain-safe Minecraft textures; R6 animation packs disabled
 ]]
 
 if getgenv().WhiteRoseLoaded then return end
@@ -253,7 +251,7 @@ local function isR6Rig(char)
     return getRigType(char) == Enum.HumanoidRigType.R6
 end
 
--- // Accessory + Hair Manager (manual weld, cosmetic-only parts, respawn retry) \ --
+-- // Accessory + Hair Manager (manual weld, cosmetic-only, respawn retry) \ --
 local SCRIPTED_ACCESSORY_ATTRIBUTE = "WhiteRoseScriptedAccessory"
 local SCRIPTED_HAIR_ATTRIBUTE = "WhiteRoseScriptedHair"
 local AccessoryManager = {}
@@ -269,8 +267,7 @@ local FALLBACK_ATTACHMENT_CFRAMES = {
     WaistAttachment = CFrame.new(0, -0.8, 0),
 }
 
--- Makes every BasePart of an accessory purely cosmetic so it never
--- blocks movement / crouch ("Cannot un-crouch cause of this part" fix)
+-- Makes every BasePart purely cosmetic (fixes "Cannot un-crouch" spam)
 local function makeCosmetic(root)
     for _, desc in ipairs(root:GetDescendants()) do
         if desc:IsA("BasePart") then
@@ -919,6 +916,7 @@ local function playEmote(char, emoteName)
         anim.AnimationId = emoteId
 
         local loaded = humanoid:LoadAnimation(anim)
+        anim:Destroy() -- LEAK FIX: track copied the ID; free the descriptor
         ClientState.Scripted.CurrentEmote = loaded
         loaded:Play()
 
@@ -1390,7 +1388,6 @@ allActions = {
     ["Silver King of the Night"] = { category = "Accessories", type = "Accessory", action = { Head = { 439945661 } } },
     ["Poisoned Horns of the Toxic Wasteland"] = { category = "Accessories", type = "Accessory", action = { Head = { 1744060292 } } },
 
-    -- Face / Neck / Waist accessories
     ["Sanji Ears (PTS)"] = { category = "Accessories", type = "Accessory", action = { Face = { 81759542155072 } } },
     ["Sanji"] = { category = "Accessories", type = "Accessory", action = { Face = { 93768783006575 } } },
     ["Black Folded Collar with Buttons"] = { category = "Accessories", type = "Accessory", action = { Neck = { 80756618475441 } } },
@@ -1398,18 +1395,27 @@ allActions = {
 }
 
 -- // Titan Engine Logic \ --
-local activeTweens = {}
+-- LEAK FIX: weak keys so destroyed instances are released; finished tweens dropped
+local activeTweens = setmetatable({}, { __mode = "k" })
 local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 
 local function playSafeTween(instance, properties)
     if not instance then return end
 
-    if activeTweens[instance] then
-        activeTweens[instance]:Cancel()
+    local old = activeTweens[instance]
+    if old then
+        old:Cancel()
     end
 
     local tween = TweenService:Create(instance, tweenInfo, properties)
     activeTweens[instance] = tween
+
+    tween.Completed:Connect(function()
+        if activeTweens[instance] == tween then
+            activeTweens[instance] = nil
+        end
+    end)
+
     tween:Play()
 end
 
@@ -1838,7 +1844,7 @@ Groups.TitanEnv:AddSlider("RainIntensitySlider", {
     end
 })
 
--- // MineCraft Textures (Terrain-safe) \ --
+-- // MineCraft Textures (Terrain-safe, jam-proof) \ --
 Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
         local workspace = workspace
@@ -1953,26 +1959,30 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
             end
         end
 
+        -- LEAK FIX: entire drain pcall-wrapped so processingQueue can never
+        -- stick at true (a stuck flag = partQueue grows forever)
         local function ProcessQueue()
             if processingQueue then return end
 
             processingQueue = true
 
             task.spawn(function()
-                while #partQueue > 0 do
-                    local chunkCount = math.min(500, #partQueue)
+                pcall(function()
+                    while #partQueue > 0 do
+                        local chunkCount = math.min(500, #partQueue)
 
-                    for _ = 1, chunkCount do
-                        local item = table.remove(partQueue, #partQueue)
-                        if item and item.part and item.part.Parent then
-                            pcall(ProcessPartLogic, item.part, item.variantName)
+                        for _ = 1, chunkCount do
+                            local item = table.remove(partQueue, #partQueue)
+                            if item and item.part and item.part.Parent then
+                                pcall(ProcessPartLogic, item.part, item.variantName)
+                            end
+                        end
+
+                        if #partQueue > 0 then
+                            task.wait()
                         end
                     end
-
-                    if #partQueue > 0 then
-                        task.wait()
-                    end
-                end
+                end)
 
                 processingQueue = false
             end)
