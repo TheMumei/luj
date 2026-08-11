@@ -1,10 +1,14 @@
 --[[
-WhiteRose - V4.5 (Fully Fixed)
-- Fixed syntax error (De fault -> Default) and all trailing-space bugs
-- Accessories re-attach after death (retry + fallback attachments)
-- Minecraft Textures no longer breaks Terrain (Terrain skipped, no global material override)
-- R6 rigs: custom animation packs/overrides disabled (fixes broken jump)
-- Safer resets, unload, anonymizer, emotes, and face restoration
+WhiteRose - V4.8
+- Anonymizer removed (moved to standalone script); NameTag still respects _G.AnonymizerLoaded
+- Removed "Red Angry Anime Hitmarker Filter"
+- All base fixes (syntax, trailing spaces, resets, unload)
+- Accessories: manual weld (no AddAccessory), R6 fallback attachments, respawn retry
+- Hairs: Vinsmoke Blonde TS Boy Hair + Sanji (✔) (automatic placement)
+- NEW accessories: Sanji Ears (PTS) / Sanji mask / Black Folded Collar / Tailcoat Addon
+- Sanji (+) Shirt / Sanji (-) Pants (offsale-safe direct templates)
+- Minecraft Textures no longer breaks Terrain
+- R6 rigs: custom animation packs disabled (fixes broken jump)
 ]]
 
 if getgenv().WhiteRoseLoaded then return end
@@ -78,13 +82,15 @@ local CONFIG = {
         Shirt = {
             ["None"] = false,
             ["Remove"] = false,
-            ["Yuno Gasai Mirai Nikki"] = 6412908981
+            ["Yuno Gasai Mirai Nikki"] = 6412908981,
+            ["Sanji (+)"] = "http://www.roblox.com/asset/?id=18529496130"
         },
         Pants = {
             ["None"] = false,
             ["Remove"] = false,
             ["Yuno Gasai Mirai Nikki"] = 6412913951,
-            ["Yuno Gasai Anime Black Dress V2"] = 14696725708
+            ["Yuno Gasai Anime Black Dress V2"] = 14696725708,
+            ["Sanji (-)"] = "http://www.roblox.com/asset/?id=18529553305"
         },
         TShirt = {
             ["None"] = false,
@@ -175,7 +181,6 @@ local ClientState = {
         CharacterAdded = nil,
         Rainbow = nil,
         Env = {},
-        Anonymizer = {},
         EmoteStop = nil
     },
 
@@ -247,8 +252,9 @@ local function isR6Rig(char)
     return getRigType(char) == Enum.HumanoidRigType.R6
 end
 
--- // Accessory Manager (respawn retry + fallback attachments) \ --
+-- // Accessory + Hair Manager (manual weld, fallback attachments, respawn retry) \ --
 local SCRIPTED_ACCESSORY_ATTRIBUTE = "WhiteRoseScriptedAccessory"
+local SCRIPTED_HAIR_ATTRIBUTE = "WhiteRoseScriptedHair"
 local AccessoryManager = {}
 
 local FALLBACK_ATTACHMENT_CFRAMES = {
@@ -266,53 +272,35 @@ local function weldAccessory(character, accessory)
     local handle = accessory:FindFirstChild("Handle")
     if not handle or not handle:IsA("BasePart") then return false end
 
-    local handleAttachment, characterAttachment
-
-    for _, att in ipairs(handle:GetChildren()) do
-        if att:IsA("Attachment") then
-            for _, descendant in ipairs(character:GetDescendants()) do
-                if descendant:IsA("Attachment") and descendant.Name == att.Name then
-                    local part = descendant.Parent
-                    if part and part:IsA("BasePart") then
-                        handleAttachment = att
-                        characterAttachment = descendant
-                        break
-                    end
-                end
-            end
-            if handleAttachment then break end
-        end
+    local handleAttachment = handle:FindFirstChildWhichIsA("Attachment")
+    if not handleAttachment then
+        handleAttachment = Instance.new("Attachment")
+        handleAttachment.Name = "WhiteRoseHandleAttachment"
+        handleAttachment.Parent = handle
     end
 
-    if not handleAttachment then
-        handleAttachment = handle:FindFirstChildWhichIsA("Attachment")
+    local characterAttachment
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("Attachment") and descendant.Name == handleAttachment.Name then
+            local part = descendant.Parent
+            if part and part:IsA("BasePart") then
+                characterAttachment = descendant
+                break
+            end
+        end
     end
 
     if not characterAttachment then
         local head = character:FindFirstChild("Head")
         if not head then return false end
 
-        if handleAttachment then
-            local fallbackName = handleAttachment.Name .. "_WhiteRoseFallback"
-            characterAttachment = head:FindFirstChild(fallbackName)
-            if not characterAttachment then
-                characterAttachment = Instance.new("Attachment")
-                characterAttachment.Name = fallbackName
-                characterAttachment.CFrame = FALLBACK_ATTACHMENT_CFRAMES[handleAttachment.Name] or CFrame.new(0, 0.6, 0)
-                characterAttachment.Parent = head
-            end
-        else
-            handleAttachment = Instance.new("Attachment")
-            handleAttachment.Name = "WhiteRoseHandleAttachment"
-            handleAttachment.Parent = handle
-
-            characterAttachment = head:FindFirstChild("WhiteRoseFallback")
-            if not characterAttachment then
-                characterAttachment = Instance.new("Attachment")
-                characterAttachment.Name = "WhiteRoseFallback"
-                characterAttachment.CFrame = CFrame.new(0, 0.6, 0)
-                characterAttachment.Parent = head
-            end
+        local fallbackName = handleAttachment.Name .. "_WhiteRoseFallback"
+        characterAttachment = head:FindFirstChild(fallbackName)
+        if not characterAttachment then
+            characterAttachment = Instance.new("Attachment")
+            characterAttachment.Name = fallbackName
+            characterAttachment.CFrame = FALLBACK_ATTACHMENT_CFRAMES[handleAttachment.Name] or CFrame.new(0, 0.6, 0)
+            characterAttachment.Parent = head
         end
     end
 
@@ -338,6 +326,107 @@ local function weldAccessory(character, accessory)
     return true
 end
 
+local function computeAutoHairOffset(head, parts, baseCFrame)
+    local inv = baseCFrame:Inverse()
+    local min = Vector3.new(math.huge, math.huge, math.huge)
+    local max = Vector3.new(-math.huge, -math.huge, -math.huge)
+
+    for _, part in ipairs(parts) do
+        local rel = inv * part.CFrame
+        local half = part.Size / 2
+        for _, sx in ipairs({ -1, 1 }) do
+            for _, sy in ipairs({ -1, 1 }) do
+                for _, sz in ipairs({ -1, 1 }) do
+                    local corner = rel:PointToWorldSpace(Vector3.new(half.X * sx, half.Y * sy, half.Z * sz))
+                    min = Vector3.new(math.min(min.X, corner.X), math.min(min.Y, corner.Y), math.min(min.Z, corner.Z))
+                    max = Vector3.new(math.max(max.X, corner.X), math.max(max.Y, corner.Y), math.max(max.Z, corner.Z))
+                end
+            end
+        end
+    end
+
+    local centerX = (min.X + max.X) / 2
+    local centerZ = (min.Z + max.Z) / 2
+    local headTop = head.Size.Y / 2
+
+    return CFrame.new(-centerX, (headTop + 0.1) - max.Y, -centerZ)
+end
+
+local function attachMeshHair(character, root, assetId)
+    local head = character:FindFirstChild("Head")
+    if not head then return false end
+
+    local parts = {}
+    if root:IsA("BasePart") then
+        parts[1] = root
+    else
+        for _, descendant in ipairs(root:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                table.insert(parts, descendant)
+            end
+        end
+    end
+    if #parts == 0 then return false end
+
+    local base = parts[1]
+    local baseCFrame = base.CFrame
+
+    local attachPart, attachAtt = nil, nil
+    for _, part in ipairs(parts) do
+        local att = part:FindFirstChildWhichIsA("Attachment")
+        if att then
+            attachPart, attachAtt = part, att
+            break
+        end
+    end
+
+    local c0
+
+    if attachAtt then
+        local headAtt = head:FindFirstChild(attachAtt.Name)
+        if not headAtt then
+            headAtt = Instance.new("Attachment")
+            headAtt.Name = attachAtt.Name
+            headAtt.CFrame = FALLBACK_ATTACHMENT_CFRAMES[attachAtt.Name] or CFrame.new(0, 0.6, 0)
+            headAtt.Parent = head
+        end
+
+        local relAtt = baseCFrame:Inverse() * attachPart.CFrame
+        c0 = headAtt.CFrame * attachAtt.CFrame:Inverse() * relAtt:Inverse()
+    else
+        c0 = computeAutoHairOffset(head, parts, baseCFrame)
+    end
+
+    local holder = Instance.new("Folder")
+    holder.Name = "WhiteRoseScriptedHair"
+    holder:SetAttribute(SCRIPTED_HAIR_ATTRIBUTE, true)
+
+    for _, part in ipairs(parts) do
+        local rel = baseCFrame:Inverse() * part.CFrame
+
+        part.Anchored = false
+        part.CanCollide = false
+        part.Massless = true
+        part.Parent = holder
+
+        local weld = Instance.new("Weld")
+        weld.Name = "WhiteRoseHairWeld"
+        weld.Part0 = head
+        weld.Part1 = part
+        weld.C0 = c0
+        weld.C1 = rel:Inverse()
+        weld.Parent = part
+    end
+
+    holder.Parent = character
+
+    if root ~= base then
+        pcall(function() root:Destroy() end)
+    end
+
+    return true
+end
+
 function AccessoryManager:Clear(character)
     if not character then return end
     for _, child in ipairs(character:GetChildren()) do
@@ -347,25 +436,24 @@ function AccessoryManager:Clear(character)
                 safeDestroy(weldReference.Value)
             end
             safeDestroy(child)
+        elseif child:GetAttribute(SCRIPTED_HAIR_ATTRIBUTE) then
+            safeDestroy(child)
         end
     end
 end
 
 function AccessoryManager:LoadTemplate(assetId)
     local template = ClientState.Cache.AccessoryTemplates[assetId]
-    if template and template:FindFirstChild("Handle") then
-        return template
-    end
+    if template then return template end
 
     local ok, objects = pcall(game.GetObjects, game, "rbxassetid://" .. tostring(assetId))
     local asset = ok and objects and objects[1]
-    template = asset and (asset:IsA("Accessory") and asset or asset:FindFirstChildWhichIsA("Accessory", true))
 
-    if template then
-        ClientState.Cache.AccessoryTemplates[assetId] = template
+    if asset then
+        ClientState.Cache.AccessoryTemplates[assetId] = asset
     end
 
-    return template
+    return asset
 end
 
 function AccessoryManager:Add(character, assetId)
@@ -374,15 +462,31 @@ function AccessoryManager:Add(character, assetId)
     local template = self:LoadTemplate(assetId)
     if not template then return nil end
 
-    local accessory = template:Clone()
-    accessory:SetAttribute(SCRIPTED_ACCESSORY_ATTRIBUTE, true)
+    local clone = template:Clone()
 
-    if not weldAccessory(character, accessory) then
-        safeDestroy(accessory)
-        return nil
+    local accessory = clone:IsA("Accessory") and clone or clone:FindFirstChildWhichIsA("Accessory", true)
+
+    if accessory then
+        accessory:SetAttribute(SCRIPTED_ACCESSORY_ATTRIBUTE, true)
+
+        if not weldAccessory(character, accessory) then
+            safeDestroy(clone)
+            return nil
+        end
+
+        if clone ~= accessory then
+            pcall(function() clone:Destroy() end)
+        end
+
+        return accessory
     end
 
-    return accessory
+    if attachMeshHair(character, clone, assetId) then
+        return clone
+    end
+
+    safeDestroy(clone)
+    return nil
 end
 
 function AccessoryManager:Sync(character, accessoryGroups)
@@ -417,7 +521,7 @@ function AccessoryManager:Sync(character, accessoryGroups)
                 task.wait(0.5)
             end
             if not attached then
-                warn("WhiteRose: Could not attach accessory " .. tostring(assetId))
+                warn("WhiteRose: Could not attach item " .. tostring(assetId))
             end
         end)
     end
@@ -686,7 +790,6 @@ local function applyAnim(char, packName)
         local anim = char:WaitForChild("Animate", 5)
         if not anim then return end
 
-        -- R6 FIX: R15 packs/overrides cannot play on R6 and break jump/movement.
         local isR6 = isR6Rig(char)
 
         if isR6 and packName ~= "None" then
@@ -702,7 +805,6 @@ local function applyAnim(char, packName)
             end
         end
 
-        -- Safe capture of original animation IDs (works on R6 and R15 layouts)
         if not next(ClientState.Cache.OriginalAnimations) then
             local function getID(nodeName, childName)
                 local node = anim:FindFirstChild(nodeName)
@@ -732,7 +834,6 @@ local function applyAnim(char, packName)
             pack[animationName] = animationId
         end
 
-        -- Overrides are R15-only
         if not isR6 then
             for _, override in pairs(CONFIG.AnimationOverrides) do
                 local toggle = Library.Toggles[override.key]
@@ -1069,6 +1170,9 @@ allActions = {
         end
     },
 
+    ["Vinsmoke Blonde TS Boy Hair"] = { category = "Body", type = "Accessory", action = { Hair = { 16990001265 } } },
+    ["Sanji (✔)"] = { category = "Body", type = "Accessory", action = { Hair = { 86494218909624 } } },
+
     ["Epic Face"] = {
         category = "Faces",
         type = "Function",
@@ -1256,7 +1360,6 @@ allActions = {
     ["Y2K Long Wavy Pigtails in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 11364071979 } } },
     ["Middle Swept Spiky Bangs in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 9008209306 } } },
     ["Celebrity Bling"] = { category = "Accessories", type = "Accessory", action = { Head = { 6239323549 } } },
-    ["Red Angry Anime Hitmarker Filter"] = { category = "Accessories", type = "Accessory", action = { Head = { 9922633567 } } },
     ["Red Goth Axe"] = { category = "Accessories", type = "Accessory", action = { Torso = { 11386880969 } } },
     ["Katana [Handheld]"] = { category = "Accessories", type = "Accessory", action = { Auto = { 12380877175 } } },
     ["Wispy Willow Pigtails in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 12394572381 } } },
@@ -1266,7 +1369,13 @@ allActions = {
     ["Blackvalk"] = { category = "Accessories", type = "Accessory", action = { Head = { 124730194 } } },
     ["Frozen Horns of the Frigid Planes"] = { category = "Accessories", type = "Accessory", action = { Head = { 74891470 } } },
     ["Silver King of the Night"] = { category = "Accessories", type = "Accessory", action = { Head = { 439945661 } } },
-    ["Poisoned Horns of the Toxic Wasteland"] = { category = "Accessories", type = "Accessory", action = { Head = { 1744060292 } } }
+    ["Poisoned Horns of the Toxic Wasteland"] = { category = "Accessories", type = "Accessory", action = { Head = { 1744060292 } } },
+
+    -- Face / Neck / Waist accessories
+    ["Sanji Ears (PTS)"] = { category = "Accessories", type = "Accessory", action = { Face = { 81759542155072 } } },
+    ["Sanji"] = { category = "Accessories", type = "Accessory", action = { Face = { 93768783006575 } } },
+    ["Black Folded Collar with Buttons"] = { category = "Accessories", type = "Accessory", action = { Neck = { 80756618475441 } } },
+    ["Tailcoat Addon"] = { category = "Accessories", type = "Accessory", action = { Waist = { 114813132263944 } } }
 }
 
 -- // Titan Engine Logic \ --
@@ -1338,7 +1447,7 @@ local function ensureEffects()
     end
 end
 
--- // NameTag Logic \ --
+-- // NameTag Logic (still respects the standalone Anonymizer) \ --
 local lastNameTagUpdate = 0
 
 local function updateNameTag()
@@ -1750,7 +1859,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
             [Enum.Material.WoodPlanks] = { "11546480686", "8676581022" }
         }
 
-        -- Clear old variants/overrides
         for _, child in ipairs(MaterialService:GetChildren()) do
             if child:IsA("MaterialVariant") and string.sub(child.Name, 1, 4) == "abs_" then
                 pcall(function()
@@ -1777,9 +1885,7 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
             v.Parent = MaterialService
 
             ActiveVariants[matEnum] = variantName
-            -- NOTE: NO global SetBaseMaterialOverride here!
-            -- A global override re-skins the Terrain too.
-            -- Variants are applied per-part below instead.
+            -- NO global SetBaseMaterialOverride: it would re-skin the Terrain.
         end
 
         local humanoidCache = setmetatable({}, { __mode = "k" })
@@ -1811,7 +1917,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
         local processingQueue = false
 
         local function ProcessPartLogic(part, variantName)
-            -- TERRAIN FIX: never touch the Terrain object
             if not part.Parent or part:IsA("Terrain") or IsHumanoidPart(part) then return end
 
             if part:IsA("MeshPart") then
@@ -1855,7 +1960,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
         end
 
         local function ProcessPart(part, isImmediate)
-            -- TERRAIN FIX: Terrain is a BasePart, so explicitly skip it
             if not part:IsA("BasePart") or part:IsA("Terrain") then return end
 
             local variantName = ActiveVariants[part.Material]
@@ -2036,537 +2140,6 @@ Groups.TitanVis:AddButton("Activate RTX Day Mode ☀️", function()
     })
 end)
 
-Groups.TitanUtil:AddInput("AnonymizerPrefix", {
-    Default = "Player",
-    Numeric = false,
-    Finished = true,
-    Text = "Custom Name Prefix",
-    Placeholder = "Player"
-})
-
-Groups.TitanUtil:AddButton("Activate Anonymizer (Hide Names)", function()
-    if _G.AnonymizerLoaded then
-        Library:Notify({
-            Title = "System",
-            Content = "Anonymizer is already active!",
-            Duration = 3
-        })
-        return
-    end
-
-    _G.AnonymizerLoaded = true
-
-    local PlayersService = game:GetService("Players")
-    local RunServiceLocal = game:GetService("RunService")
-    local CoreGui = game:GetService("CoreGui")
-
-    local successTextChat, TextChatService = pcall(function()
-        return game:GetService("TextChatService")
-    end)
-
-    if not successTextChat then
-        TextChatService = nil
-    end
-
-    local LocalPlayer = PlayersService.LocalPlayer
-
-    local customPrefix = "Player"
-    if Library.Options.AnonymizerPrefix and Library.Options.AnonymizerPrefix.Value ~= "" then
-        customPrefix = Library.Options.AnonymizerPrefix.Value
-    end
-
-    local Config = {
-        AnonymousPrefix = customPrefix,
-        HideLocalPlayer = true
-    }
-
-    local ACTIVE_GUARDS = setmetatable({}, { __mode = "k" })
-    local REPLACEMENT_MAP = {}
-    local SORTED_REPLACEMENT_ORDER = {}
-    local sortedIndexMap = {}
-    local ESCAPED_NAME_MAP = {}
-    local playerNumberMap = {}
-    local availableNumbers = {}
-    local playerCounter = 0
-    local playerKnownNames = {}
-    local dirtyObjects = {}
-
-    local function escapePattern(text)
-        return text:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
-    end
-
-    local Anonymizer = {}
-
-    function Anonymizer.replaceText(text)
-        if type(text) ~= "string" or #text == 0 then
-            return text
-        end
-
-        for _, original in ipairs(SORTED_REPLACEMENT_ORDER) do
-            local replacement = REPLACEMENT_MAP[original]
-            if replacement then
-                text = text:gsub(ESCAPED_NAME_MAP[original], replacement)
-            end
-        end
-
-        return text
-    end
-
-    local NameManager = {}
-
-    local function getNameVariants(p, displayNameReplacement, atReplacement)
-        return {
-            [p.Name] = displayNameReplacement,
-            ["@" .. p.Name] = atReplacement,
-            [p.DisplayName] = displayNameReplacement,
-            ["@" .. p.DisplayName] = atReplacement
-        }
-    end
-
-    function NameManager.insertSorted(name)
-        ESCAPED_NAME_MAP[name] = escapePattern(name)
-        local length = #name
-
-        for i = 1, #SORTED_REPLACEMENT_ORDER + 1 do
-            if i > #SORTED_REPLACEMENT_ORDER or length > #SORTED_REPLACEMENT_ORDER[i] then
-                table.insert(SORTED_REPLACEMENT_ORDER, i, name)
-                sortedIndexMap[name] = i
-
-                for j = i + 1, #SORTED_REPLACEMENT_ORDER do
-                    sortedIndexMap[SORTED_REPLACEMENT_ORDER[j]] = j
-                end
-
-                return
-            end
-        end
-    end
-
-    local function removeNameFromSortedList(name)
-        local index = sortedIndexMap[name]
-        if index then
-            table.remove(SORTED_REPLACEMENT_ORDER, index)
-            sortedIndexMap[name] = nil
-            ESCAPED_NAME_MAP[name] = nil
-
-            for j = index, #SORTED_REPLACEMENT_ORDER do
-                sortedIndexMap[SORTED_REPLACEMENT_ORDER[j]] = j
-            end
-        end
-    end
-
-    local function removeNamesFromSystem(names)
-        for _, name in ipairs(names) do
-            REPLACEMENT_MAP[name] = nil
-            removeNameFromSortedList(name)
-        end
-    end
-
-    function NameManager.addPlayer(p)
-        if not Config.HideLocalPlayer and p == LocalPlayer then return end
-        if playerNumberMap[p.UserId] then return end
-
-        local number = table.remove(availableNumbers) or (function()
-            playerCounter = playerCounter + 1
-            return playerCounter
-        end)()
-
-        playerNumberMap[p.UserId] = number
-
-        local displayNameReplacement = Config.AnonymousPrefix .. number
-        local atReplacement = "@" .. Config.AnonymousPrefix .. number
-
-        local variants = getNameVariants(p, displayNameReplacement, atReplacement)
-
-        for original, replacement in pairs(variants) do
-            REPLACEMENT_MAP[original] = replacement
-            NameManager.insertSorted(original)
-        end
-
-        playerKnownNames[p.UserId] = {
-            Name = p.Name,
-            DisplayName = p.DisplayName
-        }
-    end
-
-    function NameManager.removePlayer(p)
-        local number = playerNumberMap[p.UserId]
-        if not number then return end
-
-        table.insert(availableNumbers, number)
-
-        local known = playerKnownNames[p.UserId]
-        if known then
-            removeNamesFromSystem({ known.Name, "@" .. known.Name, known.DisplayName, "@" .. known.DisplayName })
-        end
-
-        playerNumberMap[p.UserId] = nil
-        playerKnownNames[p.UserId] = nil
-    end
-
-    function NameManager.updatePlayer(p)
-        if not Config.HideLocalPlayer and p == LocalPlayer then return end
-        if not playerNumberMap[p.UserId] then
-            return NameManager.addPlayer(p)
-        end
-
-        local old = playerKnownNames[p.UserId]
-        if old then
-            removeNamesFromSystem({ old.Name, "@" .. old.Name, old.DisplayName, "@" .. old.DisplayName })
-        end
-
-        local number = playerNumberMap[p.UserId]
-        local displayNameReplacement = Config.AnonymousPrefix .. number
-        local atReplacement = "@" .. Config.AnonymousPrefix .. number
-
-        local variants = getNameVariants(p, displayNameReplacement, atReplacement)
-
-        for original, replacement in pairs(variants) do
-            REPLACEMENT_MAP[original] = replacement
-            NameManager.insertSorted(original)
-        end
-
-        playerKnownNames[p.UserId] = {
-            Name = p.Name,
-            DisplayName = p.DisplayName
-        }
-    end
-
-    local UIProcessor = {}
-    local UI_HANDLERS, UPDATE_LOGIC = {}, {}
-
-    local function markAsDirty(obj)
-        dirtyObjects[obj] = true
-    end
-
-    UPDATE_LOGIC.TextLabel = function(o)
-        o.Text = Anonymizer.replaceText(o.Text)
-    end
-
-    UPDATE_LOGIC.TextButton = UPDATE_LOGIC.TextLabel
-    UPDATE_LOGIC.TextBox = UPDATE_LOGIC.TextLabel
-
-    UPDATE_LOGIC.ProximityPrompt = function(o)
-        o.ObjectText = Anonymizer.replaceText(o.ObjectText)
-        o.ActionText = Anonymizer.replaceText(o.ActionText)
-    end
-
-    local function setupDestruction(obj, key)
-        key = key or obj
-
-        obj.Destroying:Connect(function()
-            local connections = ACTIVE_GUARDS[key]
-            if connections then
-                for _, connection in ipairs(connections) do
-                    connection:Disconnect()
-                end
-                ACTIVE_GUARDS[key] = nil
-            end
-        end)
-    end
-
-    local function isWhitelisted(obj)
-        return obj:GetAttribute("IgnoreAnonymizer") == true
-    end
-
-    UI_HANDLERS.TextLabel = function(obj)
-        if ACTIVE_GUARDS[obj] or isWhitelisted(obj) then return end
-
-        markAsDirty(obj)
-
-        local textConnection = obj:GetPropertyChangedSignal("Text"):Connect(function()
-            markAsDirty(obj)
-        end)
-
-        local attributeConnection = obj:GetAttributeChangedSignal("IgnoreAnonymizer"):Connect(function()
-            if not isWhitelisted(obj) then
-                markAsDirty(obj)
-            end
-        end)
-
-        ACTIVE_GUARDS[obj] = { textConnection, attributeConnection }
-        setupDestruction(obj)
-    end
-
-    UI_HANDLERS.TextButton = UI_HANDLERS.TextLabel
-    UI_HANDLERS.TextBox = UI_HANDLERS.TextLabel
-
-    UI_HANDLERS.BillboardGui = function(obj)
-        if ACTIVE_GUARDS[obj] or isWhitelisted(obj) then return end
-
-        for _, child in ipairs(obj:GetDescendants()) do
-            UIProcessor.guardTextObject(child)
-        end
-
-        local descendantAdded = obj.DescendantAdded:Connect(UIProcessor.guardTextObject)
-        ACTIVE_GUARDS[obj] = { descendantAdded }
-        setupDestruction(obj)
-    end
-
-    UI_HANDLERS.ProximityPrompt = function(obj)
-        if ACTIVE_GUARDS[obj] or isWhitelisted(obj) then return end
-
-        markAsDirty(obj)
-
-        local objectTextConnection = obj:GetPropertyChangedSignal("ObjectText"):Connect(function()
-            markAsDirty(obj)
-        end)
-
-        local actionTextConnection = obj:GetPropertyChangedSignal("ActionText"):Connect(function()
-            markAsDirty(obj)
-        end)
-
-        ACTIVE_GUARDS[obj] = { objectTextConnection, actionTextConnection }
-        setupDestruction(obj)
-    end
-
-    function UIProcessor.guardTextObject(o)
-        local handler = UI_HANDLERS[o.ClassName]
-        if handler then
-            handler(o)
-        end
-    end
-
-    function UIProcessor.scanAndTrackContainer(c)
-        if not c then return end
-
-        if ACTIVE_GUARDS[c] then
-            for _, connection in ipairs(ACTIVE_GUARDS[c]) do
-                connection:Disconnect()
-            end
-        end
-
-        for _, descendant in ipairs(c:GetDescendants()) do
-            UIProcessor.guardTextObject(descendant)
-        end
-
-        local descendantAdded = c.DescendantAdded:Connect(UIProcessor.guardTextObject)
-        ACTIVE_GUARDS[c] = { descendantAdded }
-    end
-
-    local DisplayNameGuardian = {}
-
-    function DisplayNameGuardian.setupCharacter(character)
-        local player = PlayersService:GetPlayerFromCharacter(character)
-        if not player then return end
-
-        if not Config.HideLocalPlayer and player == LocalPlayer then return end
-
-        local function guardHumanoid(humanoid)
-            if not humanoid or ACTIVE_GUARDS[humanoid] then return end
-
-            local isUpdating = false
-
-            local function update()
-                if isUpdating then return end
-
-                local number = playerNumberMap[player.UserId]
-                local targetName = number and (Config.AnonymousPrefix .. number) or player.DisplayName
-
-                if humanoid.DisplayName ~= targetName then
-                    isUpdating = true
-                    humanoid.DisplayName = targetName
-                    isUpdating = false
-                end
-            end
-
-            update()
-
-            local humanoidDisplayNameConnection = humanoid:GetPropertyChangedSignal("DisplayName"):Connect(update)
-            local playerDisplayNameConnection = player:GetPropertyChangedSignal("DisplayName"):Connect(update)
-
-            ACTIVE_GUARDS[humanoid] = { humanoidDisplayNameConnection, playerDisplayNameConnection }
-            setupDestruction(character, humanoid)
-        end
-
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-
-        if humanoid then
-            guardHumanoid(humanoid)
-        else
-            local connection
-            connection = character.ChildAdded:Connect(function(child)
-                if child:IsA("Humanoid") then
-                    connection:Disconnect()
-                    guardHumanoid(child)
-                end
-            end)
-
-            character.Destroying:Connect(function()
-                if connection then
-                    connection:Disconnect()
-                end
-            end)
-        end
-    end
-
-    function DisplayNameGuardian.setupForPlayer(p)
-        if p.Character then
-            DisplayNameGuardian.setupCharacter(p.Character)
-        end
-
-        table.insert(ClientState.Connections.Anonymizer, p.CharacterAdded:Connect(DisplayNameGuardian.setupCharacter))
-
-        table.insert(ClientState.Connections.Anonymizer, p:GetPropertyChangedSignal("DisplayName"):Connect(function()
-            NameManager.updatePlayer(p)
-        end))
-    end
-
-    local ChatHandler = {}
-
-    function ChatHandler.setupTextChatServiceFilter()
-        if not TextChatService then return end
-
-        pcall(function()
-            TextChatService.OnIncomingMessage = function(message)
-                local properties = Instance.new("TextChatMessageProperties")
-
-                pcall(function()
-                    properties.Text = Anonymizer.replaceText(message.Text)
-                end)
-
-                return properties
-            end
-        end)
-    end
-
-    function ChatHandler.setupSystemMessageFilter()
-        if not TextChatService then return end
-
-        local function setupChannel(channel)
-            if channel.Name == "RBXSystem" then
-                channel.OnIncomingMessage = function(message)
-                    local properties = Instance.new("TextChatMessageProperties")
-
-                    pcall(function()
-                        properties.Text = Anonymizer.replaceText(message.Text)
-                    end)
-
-                    return properties
-                end
-            end
-        end
-
-        for _, channel in ipairs(TextChatService:GetChildren()) do
-            if channel:IsA("TextChannel") then
-                pcall(setupChannel, channel)
-            end
-        end
-
-        TextChatService.ChildAdded:Connect(function(channel)
-            if channel:IsA("TextChannel") then
-                pcall(setupChannel, channel)
-            end
-        end)
-    end
-
-    function ChatHandler.setupLegacyChatScanner()
-        if TextChatService and TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then return end
-
-        pcall(function()
-            local chat = CoreGui:WaitForChild("Chat", 10)
-            if chat then
-                local messageLog = chat:FindFirstChild("Frame.ChatChannelParentFrame.Frame_MessageLogDisplay", true)
-                if messageLog then
-                    UIProcessor.scanAndTrackContainer(messageLog)
-                end
-            end
-        end)
-    end
-
-    local function onPlayerAdded(p)
-        NameManager.addPlayer(p)
-        DisplayNameGuardian.setupForPlayer(p)
-    end
-
-    local function onPlayerRemoving(p)
-        NameManager.removePlayer(p)
-    end
-
-    ChatHandler.setupTextChatServiceFilter()
-    ChatHandler.setupSystemMessageFilter()
-    task.spawn(ChatHandler.setupLegacyChatScanner)
-
-    for _, p in ipairs(PlayersService:GetPlayers()) do
-        task.spawn(onPlayerAdded, p)
-    end
-
-    table.insert(ClientState.Connections.Anonymizer, PlayersService.PlayerAdded:Connect(onPlayerAdded))
-    table.insert(ClientState.Connections.Anonymizer, PlayersService.PlayerRemoving:Connect(onPlayerRemoving))
-
-    local function startTargetedScanning()
-        task.spawn(function()
-            if LocalPlayer then
-                local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
-                if playerGui then
-                    pcall(UIProcessor.scanAndTrackContainer, playerGui)
-                end
-            end
-
-            pcall(UIProcessor.scanAndTrackContainer, CoreGui)
-        end)
-
-        local function watchCharacter(character)
-            for _, descendant in ipairs(character:GetDescendants()) do
-                UIProcessor.guardTextObject(descendant)
-            end
-
-            local descendantAdded = character.DescendantAdded:Connect(UIProcessor.guardTextObject)
-            ACTIVE_GUARDS[character] = { descendantAdded }
-            setupDestruction(character)
-        end
-
-        for _, p in ipairs(PlayersService:GetPlayers()) do
-            if p.Character then
-                watchCharacter(p.Character)
-            end
-
-            table.insert(ClientState.Connections.Anonymizer, p.CharacterAdded:Connect(watchCharacter))
-        end
-
-        table.insert(ClientState.Connections.Anonymizer, PlayersService.PlayerAdded:Connect(function(p)
-            table.insert(ClientState.Connections.Anonymizer, p.CharacterAdded:Connect(watchCharacter))
-
-            if p.Character then
-                watchCharacter(p.Character)
-            end
-        end))
-    end
-
-    startTargetedScanning()
-
-    table.insert(ClientState.Connections.Anonymizer, RunServiceLocal.RenderStepped:Connect(function()
-        if next(dirtyObjects) == nil then return end
-
-        for obj in pairs(dirtyObjects) do
-            local okClass, className = pcall(function()
-                return obj.ClassName
-            end)
-
-            if okClass and className then
-                local updater = UPDATE_LOGIC[className]
-
-                if updater then
-                    local okParent, parent = pcall(function()
-                        return obj.Parent
-                    end)
-
-                    if okParent and parent then
-                        pcall(updater, obj)
-                    end
-                end
-            end
-        end
-
-        table.clear(dirtyObjects)
-    end))
-
-    Library:Notify({
-        Title = "System",
-        Content = "Anonymizer activated successfully!",
-        Duration = 3
-    })
-end)
-
 local function resetAllUI()
     local function setToggle(name, value)
         local toggle = Library.Toggles[name]
@@ -2622,14 +2195,6 @@ Groups.Tools:AddButton("Unload Script", function()
         end
     end
 
-    for _, connection in ipairs(ClientState.Connections.Anonymizer or {}) do
-        if connection then
-            pcall(function()
-                connection:Disconnect()
-            end)
-        end
-    end
-
     local rainPart = game:GetService("Workspace"):FindFirstChild("MyExecutorRainPart")
     if rainPart then
         rainPart:Destroy()
@@ -2652,8 +2217,6 @@ Groups.Tools:AddButton("Unload Script", function()
             end)
         end
     end
-
-    _G.AnonymizerLoaded = false
 
     resetAllUI()
     fullReset(Player.Character)
