@@ -1,11 +1,12 @@
 --[[
-WhiteRose - V4.8
-- Anonymizer removed (moved to standalone script); NameTag still respects _G.AnonymizerLoaded
-- Removed "Red Angry Anime Hitmarker Filter"
-- All base fixes (syntax, trailing spaces, resets, unload)
+WhiteRose - V4.9
+- FIXED: "Cannot un-crouch cause of this part" spam — attached accessories are now
+  purely cosmetic (no collide/touch/query, massless, unanchored)
+- Anonymizer removed (standalone script); NameTag still respects _G.AnonymizerLoaded
+- No "Red Angry Anime Hitmarker Filter"
 - Accessories: manual weld (no AddAccessory), R6 fallback attachments, respawn retry
 - Hairs: Vinsmoke Blonde TS Boy Hair + Sanji (✔) (automatic placement)
-- NEW accessories: Sanji Ears (PTS) / Sanji mask / Black Folded Collar / Tailcoat Addon
+- Accessories: Sanji Ears (PTS) / Sanji mask / Black Folded Collar / Tailcoat Addon
 - Sanji (+) Shirt / Sanji (-) Pants (offsale-safe direct templates)
 - Minecraft Textures no longer breaks Terrain
 - R6 rigs: custom animation packs disabled (fixes broken jump)
@@ -252,7 +253,7 @@ local function isR6Rig(char)
     return getRigType(char) == Enum.HumanoidRigType.R6
 end
 
--- // Accessory + Hair Manager (manual weld, fallback attachments, respawn retry) \ --
+-- // Accessory + Hair Manager (manual weld, cosmetic-only parts, respawn retry) \ --
 local SCRIPTED_ACCESSORY_ATTRIBUTE = "WhiteRoseScriptedAccessory"
 local SCRIPTED_HAIR_ATTRIBUTE = "WhiteRoseScriptedHair"
 local AccessoryManager = {}
@@ -268,9 +269,25 @@ local FALLBACK_ATTACHMENT_CFRAMES = {
     WaistAttachment = CFrame.new(0, -0.8, 0),
 }
 
+-- Makes every BasePart of an accessory purely cosmetic so it never
+-- blocks movement / crouch ("Cannot un-crouch cause of this part" fix)
+local function makeCosmetic(root)
+    for _, desc in ipairs(root:GetDescendants()) do
+        if desc:IsA("BasePart") then
+            desc.Anchored = false
+            desc.CanCollide = false
+            desc.CanTouch = false
+            desc.CanQuery = false
+            desc.Massless = true
+        end
+    end
+end
+
 local function weldAccessory(character, accessory)
     local handle = accessory:FindFirstChild("Handle")
     if not handle or not handle:IsA("BasePart") then return false end
+
+    makeCosmetic(accessory)
 
     local handleAttachment = handle:FindFirstChildWhichIsA("Attachment")
     if not handleAttachment then
@@ -406,6 +423,8 @@ local function attachMeshHair(character, root, assetId)
 
         part.Anchored = false
         part.CanCollide = false
+        part.CanTouch = false
+        part.CanQuery = false
         part.Massless = true
         part.Parent = holder
 
