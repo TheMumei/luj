@@ -1855,7 +1855,7 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
             [Enum.Material.Mud] = { "11546437412" },
             [Enum.Material.Pavement] = { "11546440685", "8139086777" },
             [Enum.Material.Pebble] = { "11546453485", "151776533" },
-            [Enum.Material.Rock] = { "11545456858" },
+            [Enum.Material.Rock] = { "11546456858" },
             [Enum.Material.Salt] = { "11546461451", "6756014847" },
             [Enum.Material.Sand] = { "11546468464" },
             [Enum.Material.Sandstone] = { "11546471860", "152572221" },
