@@ -1,8 +1,8 @@
 --[[
-WhiteRose - V5.0 (Leak-clean final)
-- LEAK FIX: activeTweens uses weak keys + drops finished tweens
-- LEAK FIX: playEmote destroys the Animation descriptor after loading
-- LEAK FIX: Minecraft queue drain fully pcall-wrapped (flag can never stick)
+WhiteRose - V5.1
+- FIX: "Parent property of Pants is locked" — store/restore clothing is now
+  defensive (dead originals skipped silently, scripted items never stored)
+- LEAK FIXES: weak-key activeTweens, emote Animation destroy, jam-proof MC queue
 - Cosmetic-only accessories (no "Cannot un-crouch" spam)
 - Anonymizer removed (standalone); NameTag still respects _G.AnonymizerLoaded
 - Accessories/hairs: manual weld, R6 fallbacks, respawn retry, auto placement
@@ -267,7 +267,6 @@ local FALLBACK_ATTACHMENT_CFRAMES = {
     WaistAttachment = CFrame.new(0, -0.8, 0),
 }
 
--- Makes every BasePart purely cosmetic (fixes "Cannot un-crouch" spam)
 local function makeCosmetic(root)
     for _, desc in ipairs(root:GetDescendants()) do
         if desc:IsA("BasePart") then
@@ -653,19 +652,32 @@ local clothingTypes = {
     TShirt = { className = "ShirtGraphic", propertyName = "Graphic" }
 }
 
+-- FIX: safe re-parent — destroyed instances have a locked Parent; never throws
+local function tryReparent(item, newParent)
+    if not item then return false end
+
+    local ok = pcall(function()
+        item.Parent = newParent
+    end)
+
+    return ok
+end
+
 local function restoreOriginalClothing(character, typeStr)
     local originals = ClientState.Originals.Clothing
 
     if typeStr == "TShirt" then
         for _, item in ipairs(originals.TShirts) do
-            if item then item.Parent = character end
+            tryReparent(item, character)
         end
         originals.TShirts = {}
         return
     end
 
     local item = originals[typeStr]
-    if item then item.Parent = character end
+    if item then
+        tryReparent(item, character)
+    end
     originals[typeStr] = nil
 end
 
@@ -676,18 +688,29 @@ local function storeOriginalClothing(character, typeStr, className)
         if #originals.TShirts > 0 then return end
 
         for _, item in ipairs(character:GetChildren()) do
-            if item:IsA(className) and item ~= ClientState.Scripted.TShirt then
-                table.insert(originals.TShirts, item)
-                item.Parent = nil
+            if item:IsA(className)
+                and item ~= ClientState.Scripted.TShirt
+                and item.Name ~= "WhiteRose_ScriptedItem" then
+                if tryReparent(item, nil) then
+                    table.insert(originals.TShirts, item)
+                end
             end
         end
         return
     end
 
-    local original = originals[typeStr] or character:FindFirstChildOfClass(className)
-    if original then
-        originals[typeStr] = original
-        original.Parent = nil
+    local original = originals[typeStr]
+
+    -- If the stored original died (game destroyed it), fall back to the
+    -- character's current original. Never store our scripted item.
+    if not (original and original.Name ~= "WhiteRose_ScriptedItem" and tryReparent(original, nil)) then
+        original = character:FindFirstChildOfClass(className)
+
+        if original and original.Name ~= "WhiteRose_ScriptedItem" and tryReparent(original, nil) then
+            originals[typeStr] = original
+        else
+            originals[typeStr] = nil
+        end
     end
 end
 
@@ -916,7 +939,7 @@ local function playEmote(char, emoteName)
         anim.AnimationId = emoteId
 
         local loaded = humanoid:LoadAnimation(anim)
-        anim:Destroy() -- LEAK FIX: track copied the ID; free the descriptor
+        anim:Destroy() -- LEAK FIX
         ClientState.Scripted.CurrentEmote = loaded
         loaded:Play()
 
@@ -1364,7 +1387,11 @@ allActions = {
                 end
             else
                 for _, item in ipairs(ClientState.Originals.Clothing.Accessories) do
-                    item.Parent = c
+                    if item then
+                        pcall(function()
+                            item.Parent = c
+                        end)
+                    end
                 end
                 ClientState.Originals.Clothing.Accessories = {}
             end
@@ -1395,7 +1422,6 @@ allActions = {
 }
 
 -- // Titan Engine Logic \ --
--- LEAK FIX: weak keys so destroyed instances are released; finished tweens dropped
 local activeTweens = setmetatable({}, { __mode = "k" })
 local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 
@@ -1910,7 +1936,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
             v.Parent = MaterialService
 
             ActiveVariants[matEnum] = variantName
-            -- NO global SetBaseMaterialOverride: it would re-skin the Terrain.
         end
 
         local humanoidCache = setmetatable({}, { __mode = "k" })
@@ -1959,8 +1984,6 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
             end
         end
 
-        -- LEAK FIX: entire drain pcall-wrapped so processingQueue can never
-        -- stick at true (a stuck flag = partQueue grows forever)
         local function ProcessQueue()
             if processingQueue then return end
 
