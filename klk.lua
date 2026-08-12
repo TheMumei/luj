@@ -1,14 +1,3 @@
---[[
-WhiteRose - V5.3
-- Removed: Rainbow Body Mode
-- Removed: Utility section + Katana [Handheld]
-- FIX: "Parent property of Pants is locked" — defensive clothing store/restore
-- LEAK FIXES: weak-key activeTweens, emote Animation destroy, jam-proof MC queue
-- Cosmetic-only accessories (no "Cannot un-crouch" spam)
-- Anonymizer removed (standalone); NameTag still respects _G.AnonymizerLoaded
-- Accessories/hairs: manual weld, R6 fallbacks, respawn retry, auto placement
-- Terrain-safe Minecraft textures; R6 animation packs disabled
-]]
 
 if getgenv().WhiteRoseLoaded then return end
 
