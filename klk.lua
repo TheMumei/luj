@@ -1,7 +1,7 @@
 --[[
-WhiteRose - V5.1
-- FIX: "Parent property of Pants is locked" — store/restore clothing is now
-  defensive (dead originals skipped silently, scripted items never stored)
+WhiteRose - V5.2
+- Removed: Utility section (Titan groupbox) and "Katana [Handheld]"
+- FIX: "Parent property of Pants is locked" — defensive clothing store/restore
 - LEAK FIXES: weak-key activeTweens, emote Animation destroy, jam-proof MC queue
 - Cosmetic-only accessories (no "Cannot un-crouch" spam)
 - Anonymizer removed (standalone); NameTag still respects _G.AnonymizerLoaded
@@ -701,8 +701,6 @@ local function storeOriginalClothing(character, typeStr, className)
 
     local original = originals[typeStr]
 
-    -- If the stored original died (game destroyed it), fall back to the
-    -- character's current original. Never store our scripted item.
     if not (original and original.Name ~= "WhiteRose_ScriptedItem" and tryReparent(original, nil)) then
         original = character:FindFirstChildOfClass(className)
 
@@ -1031,7 +1029,11 @@ local function fullReset(char)
         ClothingManager:Restore(char)
 
         for _, a in ipairs(ClientState.Originals.Clothing.Accessories) do
-            if a then a.Parent = char end
+            if a then
+                pcall(function()
+                    a.Parent = char
+                end)
+            end
         end
 
         AccessoryManager:Clear(char)
@@ -1405,7 +1407,6 @@ allActions = {
     ["Middle Swept Spiky Bangs in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 9008209306 } } },
     ["Celebrity Bling"] = { category = "Accessories", type = "Accessory", action = { Head = { 6239323549 } } },
     ["Red Goth Axe"] = { category = "Accessories", type = "Accessory", action = { Torso = { 11386880969 } } },
-    ["Katana [Handheld]"] = { category = "Accessories", type = "Accessory", action = { Auto = { 12380877175 } } },
     ["Wispy Willow Pigtails in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 12394572381 } } },
     ["Straight Bangs (Pink)"] = { category = "Accessories", type = "Accessory", action = { Head = { 12850356248 } } },
     ["Black Cutesy Side Ruffles 3.0"] = { category = "Accessories", type = "Accessory", action = { Torso = { 12366756122 } } },
@@ -1610,8 +1611,7 @@ local Groups = {
     Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
     Tools = Tabs.Useful:AddLeftGroupbox("Tools"),
     TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"),
-    TitanVis = Tabs.Titan:AddRightGroupbox("Visuals 🎨"),
-    TitanUtil = Tabs.Titan:AddLeftGroupbox("Utility ⚙️")
+    TitanVis = Tabs.Titan:AddRightGroupbox("Visuals 🎨")
 }
 
 for name, data in pairs(allActions) do
