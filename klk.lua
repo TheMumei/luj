@@ -1,12 +1,12 @@
 --[[
-WhiteRose - V5.2
-- Removed: Utility section (Titan groupbox) and "Katana [Handheld]"
+WhiteRose - V5.3
+- Removed: Rainbow Body Mode
+- Removed: Utility section + Katana [Handheld]
 - FIX: "Parent property of Pants is locked" — defensive clothing store/restore
 - LEAK FIXES: weak-key activeTweens, emote Animation destroy, jam-proof MC queue
 - Cosmetic-only accessories (no "Cannot un-crouch" spam)
 - Anonymizer removed (standalone); NameTag still respects _G.AnonymizerLoaded
 - Accessories/hairs: manual weld, R6 fallbacks, respawn retry, auto placement
-- Sanji (+) Shirt / Sanji (-) Pants; Sanji Ears / Sanji mask / Collar / Tailcoat
 - Terrain-safe Minecraft textures; R6 animation packs disabled
 ]]
 
@@ -56,7 +56,6 @@ local Window = Library:CreateWindow({
 -- // Configuration & Constants \ --
 local CONFIG = {
     RenderName = "WhiteRose_SkyUpdate",
-    RainbowSpeed = 0.5,
 
     AssetIDs = {
         HeadlessMesh = "http://www.roblox.com/asset/?id=134079402",
@@ -178,7 +177,6 @@ local ClientState = {
 
     Connections = {
         CharacterAdded = nil,
-        Rainbow = nil,
         Env = {},
         EmoteStop = nil
     },
@@ -789,34 +787,6 @@ local function applyClothingItem(char, typeStr, itemName)
     ClothingManager:Apply(char, typeStr, itemName)
 end
 
-local function updateRainbow(enabled)
-    if ClientState.Connections.Rainbow then
-        ClientState.Connections.Rainbow:Disconnect()
-        ClientState.Connections.Rainbow = nil
-    end
-
-    if enabled then
-        local hue = 0
-        ClientState.Connections.Rainbow = RunService.Heartbeat:Connect(function(dt)
-            hue = (hue + dt * CONFIG.RainbowSpeed) % 1
-            local col = Color3.fromHSV(hue, 1, 1)
-
-            if Player.Character then
-                for group in pairs(CONFIG.LimbMappings) do
-                    applyColor(Player.Character, group, col)
-                end
-            end
-        end)
-    else
-        for group in pairs(CONFIG.LimbMappings) do
-            local colorOption = Library.Options[group .. "Color"]
-            if colorOption then
-                applyColor(Player.Character, group, colorOption.Value)
-            end
-        end
-    end
-end
-
 -- // Animation Apply (R6-safe) \ --
 local function applyAnim(char, packName)
     packName = packName or "None"
@@ -975,14 +945,10 @@ local function syncCharacter(char)
 
     AccessoryManager:Sync(char, activeAccessories)
 
-    if getToggleValue("RainbowMode") then
-        updateRainbow(true)
-    else
-        for group in pairs(CONFIG.LimbMappings) do
-            local colorOption = Library.Options[group .. "Color"]
-            if colorOption then
-                applyColor(char, group, colorOption.Value)
-            end
+    for group in pairs(CONFIG.LimbMappings) do
+        local colorOption = Library.Options[group .. "Color"]
+        if colorOption then
+            applyColor(char, group, colorOption.Value)
         end
     end
 
@@ -1012,11 +978,6 @@ local function requestSync(char)
 end
 
 local function fullReset(char)
-    if ClientState.Connections.Rainbow then
-        ClientState.Connections.Rainbow:Disconnect()
-        ClientState.Connections.Rainbow = nil
-    end
-
     stopEmote()
 
     ClientState.Cache.AccessorySignature = nil
@@ -1632,12 +1593,6 @@ for name, data in pairs(allActions) do
     end
 end
 
-Groups.Body:AddToggle("RainbowMode", {
-    Text = "Rainbow Body Mode",
-    Default = false,
-    Callback = updateRainbow
-})
-
 if Player.Character then
     captureColors(Player.Character, false)
 end
@@ -2225,7 +2180,6 @@ local function resetAllUI()
     setOption("EmoteSelector", "None")
     stopEmote()
 
-    setToggle("RainbowMode", false)
     resetColors()
 end
 
@@ -2235,10 +2189,6 @@ Groups.Tools:AddButton("Reset All", function()
 end)
 
 Groups.Tools:AddButton("Unload Script", function()
-    if ClientState.Connections.Rainbow then
-        ClientState.Connections.Rainbow:Disconnect()
-    end
-
     for _, connection in pairs(ClientState.Connections.Env or {}) do
         if connection then
             pcall(function()
