@@ -1,3 +1,4 @@
+--[[ WhiteRose - V5.4 ]]
 
 if getgenv().WhiteRoseLoaded then return end
 
@@ -216,7 +217,7 @@ local function safeDestroy(obj)
     end
 end
 
--- // Rig Detection (R6 animation fix) \ --
+-- // Rig Detection \ --
 local function getRigType(char)
     if not char then return nil end
 
@@ -238,7 +239,7 @@ local function isR6Rig(char)
     return getRigType(char) == Enum.HumanoidRigType.R6
 end
 
--- // Accessory + Hair Manager (manual weld, cosmetic-only, respawn retry) \ --
+-- // Accessory + Hair Manager \ --
 local SCRIPTED_ACCESSORY_ATTRIBUTE = "WhiteRoseScriptedAccessory"
 local SCRIPTED_HAIR_ATTRIBUTE = "WhiteRoseScriptedHair"
 local AccessoryManager = {}
@@ -639,7 +640,6 @@ local clothingTypes = {
     TShirt = { className = "ShirtGraphic", propertyName = "Graphic" }
 }
 
--- FIX: safe re-parent — destroyed instances have a locked Parent; never throws
 local function tryReparent(item, newParent)
     if not item then return false end
 
@@ -776,7 +776,7 @@ local function applyClothingItem(char, typeStr, itemName)
     ClothingManager:Apply(char, typeStr, itemName)
 end
 
--- // Animation Apply (R6-safe) \ --
+-- // Animation Apply \ --
 local function applyAnim(char, packName)
     packName = packName or "None"
 
@@ -896,7 +896,7 @@ local function playEmote(char, emoteName)
         anim.AnimationId = emoteId
 
         local loaded = humanoid:LoadAnimation(anim)
-        anim:Destroy() -- LEAK FIX
+        anim:Destroy()
         ClientState.Scripted.CurrentEmote = loaded
         loaded:Play()
 
@@ -1070,6 +1070,28 @@ allActions = {
                         sm.Scale = ClientState.Originals.Headless.MeshScale
                     end
                 end
+            end
+        end
+    },
+
+    ["Remove Face"] = {
+        category = "Body",
+        type = "Function",
+        action = function(c, e)
+            local head = c and c:FindFirstChild("Head")
+            if not head then return end
+
+            local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
+            if not face then return end
+
+            if ClientState.Originals.FaceTransparency == nil then
+                ClientState.Originals.FaceTransparency = face.Transparency
+            end
+
+            if e then
+                face.Transparency = 1
+            else
+                face.Transparency = ClientState.Originals.FaceTransparency or 0
             end
         end
     },
@@ -1355,8 +1377,6 @@ allActions = {
     ["Lowered Hair Ear Tufts (Pink)"] = { category = "Accessories", type = "Accessory", action = { Head = { 8275341781 } } },
     ["Y2K Long Wavy Pigtails in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 11364071979 } } },
     ["Middle Swept Spiky Bangs in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 9008209306 } } },
-    ["Celebrity Bling"] = { category = "Accessories", type = "Accessory", action = { Head = { 6239323549 } } },
-    ["Red Goth Axe"] = { category = "Accessories", type = "Accessory", action = { Torso = { 11386880969 } } },
     ["Wispy Willow Pigtails in Pink"] = { category = "Accessories", type = "Accessory", action = { Head = { 12394572381 } } },
     ["Straight Bangs (Pink)"] = { category = "Accessories", type = "Accessory", action = { Head = { 12850356248 } } },
     ["Black Cutesy Side Ruffles 3.0"] = { category = "Accessories", type = "Accessory", action = { Torso = { 12366756122 } } },
@@ -1449,7 +1469,7 @@ local function ensureEffects()
     end
 end
 
--- // NameTag Logic (still respects the standalone Anonymizer) \ --
+-- // NameTag Logic \ --
 local lastNameTagUpdate = 0
 
 local function updateNameTag()
@@ -1814,7 +1834,7 @@ Groups.TitanEnv:AddSlider("RainIntensitySlider", {
     end
 })
 
--- // MineCraft Textures (Terrain-safe, jam-proof) \ --
+-- // MineCraft Textures \ --
 Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
         local workspace = workspace
