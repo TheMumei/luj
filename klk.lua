@@ -1,4 +1,4 @@
-```lua
+
 --[[ WhiteRose - V6.0 ]]
 
 if getgenv().WhiteRoseLoaded then return end
@@ -2312,4 +2312,3 @@ if ThemeManager and SaveManager then
 
     SaveManager:LoadAutoloadConfig()
 end
-```
