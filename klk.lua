@@ -1,4 +1,5 @@
---[[ WhiteRose - V5.4 ]]
+```lua
+--[[ WhiteRose - V6.0 ]]
 
 if getgenv().WhiteRoseLoaded then return end
 
@@ -162,7 +163,8 @@ local ClientState = {
         TShirt = nil,
         HeadlessMesh = nil,
         SkyObject = nil,
-        CurrentEmote = nil
+        CurrentEmote = nil,
+        ScarySmile = nil
     },
 
     Connections = {
@@ -589,12 +591,13 @@ local function applyColor(char, group, color)
         elseif group == "LeftLeg" then bc.LeftLegColor3 = color
         elseif group == "RightLeg" then bc.RightLegColor3 = color
         end
-    end
-
-    for _, name in ipairs(CONFIG.LimbMappings[group]) do
-        local p = char:FindFirstChild(name)
-        if p and p:IsA("BasePart") then
-            p.Color = color
+    else
+        for _, name in ipairs(CONFIG.LimbMappings[group]) do
+            local p = char:FindFirstChild(name)
+            if p and p:IsA("BasePart") then
+                p.Color = color
+                break
+            end
         end
     end
 end
@@ -609,6 +612,30 @@ local function resetColors()
             option:SetValueRGB(color)
         end
     end
+end
+
+-- Unified Face State Manager (prevents toggles from clashing)
+local function applyFaceState(char)
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
+    if not face then return end
+
+    if ClientState.Originals.FaceTransparency == nil then
+        ClientState.Originals.FaceTransparency = face.Transparency
+    end
+    if ClientState.Originals.FaceTexture == nil then
+        ClientState.Originals.FaceTexture = face.Texture
+    end
+
+    local isHeadless = getToggleValue("Headless")
+    local isFaceless = getToggleValue("Remove Face")
+    local isScary = getToggleValue("Scary Smile Outfit")
+    local isEpic = getToggleValue("Epic Face")
+
+    face.Transparency = (isHeadless or isFaceless or isScary) and 1 or (ClientState.Originals.FaceTransparency or 0)
+    face.Texture = isEpic and CONFIG.AssetIDs.FaceTexture or (ClientState.Originals.FaceTexture or "")
 end
 
 local function resolveClothingTemplate(assetId, className, propertyName)
@@ -990,23 +1017,6 @@ local function fullReset(char)
 
         local head = char:FindFirstChild("Head")
         if head then
-            if ClientState.Originals.FaceTexture or ClientState.Originals.FaceTransparency ~= nil then
-                local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
-
-                if not face and ClientState.Originals.FaceTexture then
-                    face = Instance.new("Decal")
-                    face.Name = "face"
-                    face.Parent = head
-                end
-
-                if face then
-                    if ClientState.Originals.FaceTexture then
-                        face.Texture = ClientState.Originals.FaceTexture
-                    end
-                    face.Transparency = ClientState.Originals.FaceTransparency or 0
-                end
-            end
-
             if ClientState.Originals.Headless then
                 head.Transparency = ClientState.Originals.Headless.Transparency or 0
                 local sm = head:FindFirstChildOfClass("SpecialMesh")
@@ -1015,6 +1025,8 @@ local function fullReset(char)
                 end
             end
         end
+        
+        applyFaceState(char)
     end
 
     ClientState.Originals.Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }
@@ -1039,38 +1051,18 @@ allActions = {
                 end
             end
 
-            local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
-
             if e then
-                if face then
-                    if ClientState.Originals.FaceTexture == nil then
-                        ClientState.Originals.FaceTexture = face.Texture
-                    end
-                    if ClientState.Originals.FaceTransparency == nil then
-                        ClientState.Originals.FaceTransparency = face.Transparency
-                    end
-                    face.Transparency = 1
-                end
-
                 head.Transparency = 1
-
                 local sm = head:FindFirstChildOfClass("SpecialMesh")
-                if sm then
-                    sm.Scale = Vector3.new(0, 0, 0)
-                end
+                if sm then sm.Scale = Vector3.new(0, 0, 0) end
             else
-                if face then
-                    face.Transparency = ClientState.Originals.FaceTransparency or 0
-                end
-
-                if ClientState.Originals.Headless then
-                    head.Transparency = ClientState.Originals.Headless.Transparency or 0
-                    local sm = head:FindFirstChildOfClass("SpecialMesh")
-                    if sm and ClientState.Originals.Headless.MeshScale then
-                        sm.Scale = ClientState.Originals.Headless.MeshScale
-                    end
+                head.Transparency = ClientState.Originals.Headless.Transparency or 0
+                local sm = head:FindFirstChildOfClass("SpecialMesh")
+                if sm and ClientState.Originals.Headless.MeshScale then
+                    sm.Scale = ClientState.Originals.Headless.MeshScale
                 end
             end
+            applyFaceState(c)
         end
     },
 
@@ -1078,21 +1070,7 @@ allActions = {
         category = "Body",
         type = "Function",
         action = function(c, e)
-            local head = c and c:FindFirstChild("Head")
-            if not head then return end
-
-            local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
-            if not face then return end
-
-            if ClientState.Originals.FaceTransparency == nil then
-                ClientState.Originals.FaceTransparency = face.Transparency
-            end
-
-            if e then
-                face.Transparency = 1
-            else
-                face.Transparency = ClientState.Originals.FaceTransparency or 0
-            end
+            applyFaceState(c)
         end
     },
 
@@ -1191,22 +1169,7 @@ allActions = {
         category = "Faces",
         type = "Function",
         action = function(c, e)
-            local head = c and c:FindFirstChild("Head")
-            if not head then return end
-
-            local face = head:FindFirstChild("face")
-            if not face then return end
-
-            if e then
-                if ClientState.Originals.FaceTexture == nil then
-                    ClientState.Originals.FaceTexture = face.Texture
-                end
-                face.Texture = CONFIG.AssetIDs.FaceTexture
-            else
-                if ClientState.Originals.FaceTexture then
-                    face.Texture = ClientState.Originals.FaceTexture
-                end
-            end
+            applyFaceState(c)
         end
     },
 
@@ -1217,92 +1180,67 @@ allActions = {
             if not c then return end
 
             if e then
-                local s = c:FindFirstChildOfClass("Shirt")
-                if s and not ClientState.Originals.Clothing.Shirt then
-                    ClientState.Originals.Clothing.Shirt = s
-                    s.Parent = nil
+                if not ClientState.Scripted.ScarySmile then
+                    local acc = Instance.new("Accessory")
+                    acc.Name = "ScarySmileAccessory"
+
+                    local h = Instance.new("Part")
+                    h.Name = "Handle"
+                    h.Size = Vector3.one
+                    h.Transparency = 1
+                    h.Parent = acc
+
+                    local m = Instance.new("SpecialMesh")
+                    m.MeshType = Enum.MeshType.FileMesh
+                    m.MeshId = "rbxassetid://111022241256851"
+                    m.Scale = Vector3.new(1.03, 1.03, 1.03)
+                    m.Parent = h
+
+                    local d = Instance.new("Decal")
+                    d.Face = Enum.NormalId.Front
+                    d.Texture = "http://www.roblox.com/asset/?id=120935988855219"
+                    d.Parent = h
+
+                    local ns = Instance.new("Shirt")
+                    ns.Name = "WhiteRose_ScriptedItem"
+                    ns.ShirtTemplate = "http://www.roblox.com/asset/?id=11275376793"
+
+                    local np = Instance.new("Pants")
+                    np.Name = "WhiteRose_ScriptedItem"
+                    np.PantsTemplate = "http://www.roblox.com/asset/?id=5043452775"
+
+                    ClientState.Scripted.ScarySmile = { acc = acc, shirt = ns, pants = np }
                 end
 
-                local p = c:FindFirstChildOfClass("Pants")
-                if p and not ClientState.Originals.Clothing.Pants then
-                    ClientState.Originals.Clothing.Pants = p
-                    p.Parent = nil
-                end
+                local items = ClientState.Scripted.ScarySmile
 
-                if c.Head then
-                    local face = c.Head:FindFirstChild("face") or c.Head:FindFirstChildOfClass("Decal")
-                    if face then
-                        if ClientState.Originals.FaceTexture == nil then
-                            ClientState.Originals.FaceTexture = face.Texture
-                        end
-                        if ClientState.Originals.FaceTransparency == nil then
-                            ClientState.Originals.FaceTransparency = face.Transparency
-                        end
-                        face.Transparency = 1
-                    end
-                end
+                ClothingManager:Hide(c, "Shirt")
+                ClothingManager:Hide(c, "Pants")
 
-                for _, x in ipairs(c:GetChildren()) do
-                    if x:IsA("Accessory") and x.Name == "ScarySmileAccessory" then
-                        safeDestroy(x)
-                    end
-                end
-
-                local acc = Instance.new("Accessory")
-                acc.Name = "ScarySmileAccessory"
-
-                local h = Instance.new("Part")
-                h.Name = "Handle"
-                h.Size = Vector3.one
-                h.Transparency = 1
-                h.Parent = acc
-
-                local m = Instance.new("SpecialMesh")
-                m.MeshType = Enum.MeshType.FileMesh
-                m.MeshId = "rbxassetid://111022241256851"
-                m.Scale = Vector3.new(1.03, 1.03, 1.03)
-                m.Parent = h
-
-                local d = Instance.new("Decal")
-                d.Face = Enum.NormalId.Front
-                d.Texture = "http://www.roblox.com/asset/?id=120935988855219"
-                d.Parent = h
+                items.shirt.Parent = c
+                items.pants.Parent = c
 
                 local hum = c:FindFirstChildOfClass("Humanoid")
                 if hum then
-                    hum:AddAccessory(acc)
+                    hum:AddAccessory(items.acc)
                 else
-                    acc.Parent = c
+                    items.acc.Parent = c
                 end
 
-                local ns = Instance.new("Shirt")
-                ns.Name = "WhiteRose_ScriptedItem"
-                ns.ShirtTemplate = "http://www.roblox.com/asset/?id=11275376793"
-                ns.Parent = c
-
-                local np = Instance.new("Pants")
-                np.Name = "WhiteRose_ScriptedItem"
-                np.PantsTemplate = "http://www.roblox.com/asset/?id=5043452775"
-                np.Parent = c
+                applyFaceState(c)
             else
-                for _, x in ipairs(c:GetChildren()) do
-                    if x.Name == "WhiteRose_ScriptedItem" or x.Name == "ScarySmileAccessory" then
-                        safeDestroy(x)
-                    end
+                local items = ClientState.Scripted.ScarySmile
+                if items then
+                    safeDestroy(items.acc)
+                    safeDestroy(items.shirt)
+                    safeDestroy(items.pants)
+                    ClientState.Scripted.ScarySmile = nil
                 end
 
-                local head = c:FindFirstChild("Head")
-                if head then
-                    local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
-                    if face then
-                        face.Transparency = ClientState.Originals.FaceTransparency or 0
-                        if ClientState.Originals.FaceTexture then
-                            face.Texture = ClientState.Originals.FaceTexture
-                        end
-                    end
-                end
+                ClothingManager:Show(c, "Shirt")
+                ClothingManager:Show(c, "Pants")
 
-                syncCharacter(c)
+                applyFaceState(c)
             end
         end
     },
@@ -1494,25 +1432,6 @@ local function updateNameTag()
             end
         end
     end
-
-    pcall(function()
-        local CoreGui = game:GetService("CoreGui")
-        local list = CoreGui:FindFirstChild("PlayerList")
-
-        if list then
-            for _, obj in ipairs(list:GetDescendants()) do
-                if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                    local txt = obj.Text
-                    if txt == Player.Name or txt == Player.DisplayName then
-                        if not string.find(txt, tag, 1, true) then
-                            obj.Text = tag .. " " .. txt
-                            obj.TextColor3 = col
-                        end
-                    end
-                end
-            end
-        end
-    end)
 
     pcall(function()
         local pg = Player:FindFirstChild("PlayerGui")
@@ -1735,11 +1654,10 @@ Groups.TitanEnv:AddToggle("RainToggle", {
 
             LightingService.FogStart = 0
 
-            local fogTween = TweenService:Create(LightingService, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+            playSafeTween(LightingService, {
                 FogEnd = 100000,
                 FogColor = Color3.fromRGB(190, 190, 190)
             })
-            fogTween:Play()
 
             return
         end
@@ -1796,11 +1714,10 @@ Groups.TitanEnv:AddToggle("RainToggle", {
 
             LightingService.FogStart = 0
 
-            local fogTween = TweenService:Create(LightingService, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+            playSafeTween(LightingService, {
                 FogColor = Color3.fromRGB(155, 160, 165),
                 FogEnd = 700 - (intensity * 4)
             })
-            fogTween:Play()
 
             Library:Notify({
                 Title = "System",
@@ -1827,12 +1744,31 @@ Groups.TitanEnv:AddSlider("RainIntensitySlider", {
                 emitter.Speed = NumberRange.new(50 + Value)
             end
 
-            TweenService:Create(game:GetService("Lighting"), TweenInfo.new(1, Enum.EasingStyle.Sine), {
+            playSafeTween(game:GetService("Lighting"), {
                 FogEnd = 700 - (Value * 4)
-            }):Play()
+            })
         end
     end
 })
+
+-- // Yielding Descendants (prevents lag spike on heavy maps) \ --
+local function getDescendantsYielding(root, yieldEvery)
+    local result = {}
+    local stack = {root}
+    local count = 0
+    while #stack > 0 do
+        local current = table.remove(stack)
+        if current ~= root then
+            table.insert(result, current)
+            count = count + 1
+            if count % yieldEvery == 0 then task.wait() end
+        end
+        for _, child in ipairs(current:GetChildren()) do
+            table.insert(stack, child)
+        end
+    end
+    return result
+end
 
 -- // MineCraft Textures \ --
 Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
@@ -2000,12 +1936,11 @@ Groups.TitanEnv:AddButton("Apply MineCraft Textures", function()
         end)
 
         task.spawn(function()
-            local allDescendants = workspace:GetDescendants()
-            local CHUNK_SIZE = 1500
+            local allDescendants = getDescendantsYielding(workspace, 1000)
 
             for i = 1, #allDescendants do
                 ProcessPart(allDescendants[i], true)
-                if i % CHUNK_SIZE == 0 then
+                if i % 1500 == 0 then
                     task.wait()
                 end
             end
@@ -2269,7 +2204,8 @@ ClientState.Connections.CharacterAdded = Player.CharacterAdded:Connect(function(
             TShirt = nil,
             HeadlessMesh = nil,
             SkyObject = nil,
-            CurrentEmote = nil
+            CurrentEmote = nil,
+            ScarySmile = nil
         }
 
         ClientState.Originals.LimbColors = {}
@@ -2376,3 +2312,4 @@ if ThemeManager and SaveManager then
 
     SaveManager:LoadAutoloadConfig()
 end
+```
