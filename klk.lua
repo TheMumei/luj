@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V6.8 - Fixed Headless & Smart Stealth Suite 
-    (Headless Accessory Fix + NameTag Throttle + Minecraft Queue + Custom Asset Loader)
+    WhiteRose V6.9 - Fixed & Restored Minecraft Engine
+    (Full 30 Minecraft Materials + Instant Override + Smart Headless + Custom Loader)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -16,7 +16,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v6.8", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v6.9", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -33,6 +33,40 @@ local CFG = {
     },
     Ovr = { ["Robot Swim"] = { k = "RobotSwim", v = { swim = "rbxassetid://10921253142", swimidle = "rbxassetid://10921253767" } }, ["Mage Fall"] = { k = "MageFall", v = { fall = "rbxassetid://10921148939" } }, ["Elder Jump"] = { k = "ElderJump", v = { jump = "rbxassetid://10921107367" } }, ["Toy Run"] = { k = "ToyRun", v = { run = "rbxassetid://10921306285" } } },
     Emotes = { ["None"] = false, ["Dance 1"] = "rbxassetid://507771019", ["Dance 2"] = "rbxassetid://507771955", ["Dance 3"] = "rbxassetid://507772104", ["Wave / Hello"] = "rbxassetid://507770239", ["Point"] = "rbxassetid://507770453", ["Cheer"] = "rbxassetid://507770677", ["Laugh"] = "rbxassetid://507770818" }
+}
+
+-- Complete 30 Minecraft Materials
+local MC_MATERIALS = {
+    [Enum.Material.Asphalt] = { "11545435992" },
+    [Enum.Material.Basalt] = { "11545440462", "9730055481", "7263615718", "7263618080" },
+    [Enum.Material.Brick] = { "11545453130", "9888913739" },
+    [Enum.Material.Cobblestone] = { "11545460611", "9730055481" },
+    [Enum.Material.Concrete] = { "11545468983", "7800894670", "9406005008", "8868470905" },
+    [Enum.Material.CorrodedMetal] = { "11545476330", "6920910334" },
+    [Enum.Material.CrackedLava] = { "11545484781", "2842360263" },
+    [Enum.Material.DiamondPlate] = { "11545495407", "152572134" },
+    [Enum.Material.Fabric] = { "118776397" },
+    [Enum.Material.Foil] = { "11545501473", "6928057336" },
+    [Enum.Material.Glacier] = { "11545521725", "2167946571" },
+    [Enum.Material.Granite] = { "11545524005", "151776555" },
+    [Enum.Material.Grass] = { "11545527424" },
+    [Enum.Material.Ground] = { "11545533676", "7069953551" },
+    [Enum.Material.Ice] = { "11546405701", "152528023" },
+    [Enum.Material.LeafyGrass] = { "11546412010", "7069955228" },
+    [Enum.Material.Limestone] = { "11546415687", "10180605826" },
+    [Enum.Material.Marble] = { "11546425898", "7247387416" },
+    [Enum.Material.Metal] = { "11546431794", "152572134" },
+    [Enum.Material.Mud] = { "11546437412" },
+    [Enum.Material.Pavement] = { "11546440685", "8139086777" },
+    [Enum.Material.Pebble] = { "11546453485", "151776533" },
+    [Enum.Material.Rock] = { "11546456858" },
+    [Enum.Material.Salt] = { "11546461451", "6756014847" },
+    [Enum.Material.Sand] = { "11546468464" },
+    [Enum.Material.Sandstone] = { "11546471860", "152572221" },
+    [Enum.Material.Slate] = { "11546474778" },
+    [Enum.Material.Snow] = { "11108916253" },
+    [Enum.Material.Wood] = { "11546477504" },
+    [Enum.Material.WoodPlanks] = { "11546480686", "8676581022" }
 }
 
 -- // State & Helper Functions \ --
@@ -62,7 +96,6 @@ function AM:Bind(tp, c)
         local char = tp.Parent:IsA("Model") and tp.Parent or (tp.Parent.Parent:IsA("Model") and tp.Parent.Parent or Player.Character)
         local trans, ltm = tp.Transparency, tp.LocalTransparencyModifier
 
-        -- Smart Headless Check: Don't hide accessories if Headless is enabled unless whole body is cloaked
         if getTog("Headless") and tp.Name == "Head" and char then
             local bodyPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
             if bodyPart and bodyPart.Transparency < 0.95 then
@@ -151,7 +184,7 @@ function AM:Sync(char, groups)
     if State.Cache.Char == char and State.Cache.Sig == sig then return end
     State.Cache.Char, State.Cache.Sig = char, sig
     self:Clear(char)
-    for _, id in ipairs(assetIds or ids) do
+    for _, id in ipairs(ids) do
         task.spawn(function()
             for _ = 1, 10 do
                 if not char or not char.Parent or State.Cache.Sig ~= sig then return end
@@ -279,7 +312,6 @@ allActions = {
         local sm = h:FindFirstChildOfClass("SpecialMesh")
         if sm then sm.Scale = e and Vector3.zero or (State.Orig.Headless.s or Vector3.one) end
         applyFace(c)
-        -- Re-evaluate accessories so they remain visible
         for _, child in ipairs(c:GetChildren()) do
             if child:IsA("Accessory") or child:GetAttribute("WR_Hair") then
                 local b = child:FindFirstChildWhichIsA("BasePart") or child:FindFirstChild("Handle")
@@ -553,23 +585,42 @@ end })
 
 G.TitanEnv:AddSlider("RainIntensitySlider", { Text = "Rain & Storm Intensity", Default = 50, Min = 10, Max = 100, Rounding = 0, Callback = function(v) local p = Workspace:FindFirstChild("WR_RainPart") local em = p and p:FindFirstChildOfClass("ParticleEmitter") if em then em.Rate, em.Speed = v * 40, NumberRange.new(50 + v) playSafeTween(Lighting, { FogEnd = 700 - (v * 4) }) end end })
 
--- // Batched & Protected Minecraft Textures Queue \ --
+-- // Complete & High-Quality Minecraft Textures Engine \ --
 G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
         local MS = game:GetService("MaterialService")
-        local mats = { [Enum.Material.Asphalt]={"11545435992"}, [Enum.Material.Basalt]={"11545440462"}, [Enum.Material.Brick]={"11545435130"}, [Enum.Material.Cobblestone]={"11545460611"}, [Enum.Material.Concrete]={"11545468983"}, [Enum.Material.CorrodedMetal]={"11545476330"}, [Enum.Material.DiamondPlate]={"11545495407"}, [Enum.Material.Fabric]={"118776397"}, [Enum.Material.Grass]={"11545527424"}, [Enum.Material.Ground]={"11545533676"}, [Enum.Material.Ice]={"11546405701"}, [Enum.Material.LeafyGrass]={"11546412010"}, [Enum.Material.Marble]={"11546425898"}, [Enum.Material.Metal]={"11546431794"}, [Enum.Material.Sand]={"11546468464"}, [Enum.Material.Wood]={"11546477504"}, [Enum.Material.WoodPlanks]={"11546480686"} }
-        for _, c in ipairs(MS:GetChildren()) do if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end) c:Destroy() end end
-        local act = {} for m, ids in pairs(mats) do local v = Instance.new("MaterialVariant", MS) v.Name, v.BaseMaterial, v.ColorMap, v.StudsPerTile = "abs_" .. m.Name, m, "rbxassetid://" .. ids[1], 4 act[m] = v.Name end
-        
-        local partQueue = {}
-        local queueRunning = false
+        for _, c in ipairs(MS:GetChildren()) do
+            if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then
+                pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
+                c:Destroy()
+            end
+        end
 
-        local function processSinglePart(p)
-            if not p or not p.Parent or not p:IsA("BasePart") or p:IsA("Terrain") or (p.Parent and p.Parent:FindFirstChildOfClass("Humanoid")) then return end
-            local var = act[p.Material]
-            if var and p.MaterialVariant ~= var then
-                if p:IsA("MeshPart") then p.TextureID = "" end
+        local activeVariants = {}
+        for matEnum, idList in pairs(MC_MATERIALS) do
+            local rawId = idList[math.random(1, #idList)]
+            local formattedId = string.find(rawId, "rbxassetid://") and rawId or ("rbxassetid://" .. rawId)
+            local variantName = "abs_" .. matEnum.Name
+
+            local v = Instance.new("MaterialVariant")
+            v.Name = variantName
+            v.BaseMaterial = matEnum
+            v.ColorMap = formattedId
+            v.StudsPerTile = 4
+            v.Parent = MS
+
+            activeVariants[matEnum] = variantName
+            pcall(function() MS:SetBaseMaterialOverride(matEnum, variantName) end)
+        end
+
+        local function cleanPart(p)
+            if not p or not p.Parent or not p:IsA("BasePart") or p:IsA("Terrain") then return end
+            if p:FindFirstAncestorWhichIsA("Tool") or p:FindFirstAncestorWhichIsA("Model"):FindFirstChildOfClass("Humanoid") then return end
+
+            local var = activeVariants[p.Material]
+            if var then
                 p.MaterialVariant = var
+                if p:IsA("MeshPart") then p.TextureID = "" end
                 for _, d in ipairs(p:GetChildren()) do
                     if d:IsA("Texture") or d:IsA("Decal") then d.Transparency = 1
                     elseif d:IsA("SurfaceAppearance") then d:Destroy() end
@@ -577,19 +628,22 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
             end
         end
 
-        local function startQueueProcessor()
-            if queueRunning then return end
-            queueRunning = true
+        local partQueue = {}
+        local isProcessing = false
+
+        local function runQueue()
+            if isProcessing then return end
+            isProcessing = true
             task.spawn(function()
                 while #partQueue > 0 do
-                    local count = math.min(100, #partQueue)
+                    local count = math.min(150, #partQueue)
                     for _ = 1, count do
-                        local p = table.remove(partQueue, 1)
-                        pcall(processSinglePart, p)
+                        local p = table.remove(partQueue)
+                        if p then pcall(cleanPart, p) end
                     end
-                    task.wait(0.03)
+                    task.wait(0.02)
                 end
-                queueRunning = false
+                isProcessing = false
             end)
         end
 
@@ -597,13 +651,16 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
         State.Conn.Env["MC_Tex"] = Workspace.DescendantAdded:Connect(function(p)
             if p:IsA("BasePart") then
                 table.insert(partQueue, p)
-                startQueueProcessor()
+                runQueue()
             end
         end)
 
-        for _, d in ipairs(Workspace:GetDescendants()) do if d:IsA("BasePart") then table.insert(partQueue, d) end end
-        startQueueProcessor()
-        Library:Notify({ Title = "System", Content = "MineCraft Textures queued safely!", Duration = 3 })
+        for _, d in ipairs(Workspace:GetDescendants()) do
+            if d:IsA("BasePart") then table.insert(partQueue, d) end
+        end
+        runQueue()
+
+        Library:Notify({ Title = "System", Content = "MineCraft Textures applied successfully!", Duration = 3 })
     end)
 end)
 
@@ -645,6 +702,15 @@ G.Tools:AddButton("Unload Script", function()
     for _, c in pairs(State.Conn.Env) do if c then pcall(function() c:Disconnect() end) end end
     local rPart = Workspace:FindFirstChild("WR_RainPart") if rPart then rPart:Destroy() end
     pcall(function() RunService:UnbindFromRenderStep("WR_Rain") end)
+
+    local MS = game:GetService("MaterialService")
+    for _, c in ipairs(MS:GetChildren()) do
+        if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then
+            pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
+            c:Destroy()
+        end
+    end
+
     resetAllUI() fullReset(Player.Character)
     if State.Conn.CharacterAdded then State.Conn.CharacterAdded:Disconnect() end
     getgenv().WhiteRoseLoaded = nil Library:Unload()
