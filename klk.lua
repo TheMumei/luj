@@ -1,4 +1,7 @@
---[[ WhiteRose V6.6 - Ultra-Compact Edition | Optimized by MrOG & AI ]]
+--[[ 
+    WhiteRose V6.7 - Enhanced & Optimized Suite 
+    (NameTag Throttled + Minecraft Queue + Custom Asset Loader)
+]]
 if getgenv().WhiteRoseLoaded then return end
 
 local Players, Lighting, RunService, TweenService, Workspace, UserInputService, GuiService = 
@@ -13,7 +16,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v6.6", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v6.7", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -36,7 +39,7 @@ local CFG = {
 local allActions = {}
 local State = {
     Orig = { LimbColors = {}, Sound = {}, Lighting = {}, Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, LimbData = {} },
-    Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil },
+    Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil, CustomAccs = {} },
     Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {} }
 }
 
@@ -115,6 +118,8 @@ function AM:Clear(char)
             safeDestroy(c)
         end
     end
+    for _, obj in ipairs(State.Scripted.CustomAccs) do safeDestroy(obj) end
+    State.Scripted.CustomAccs = {}
 end
 
 function AM:Sync(char, groups)
@@ -312,7 +317,7 @@ local Tabs = { Appearance = Window:AddTab("Appearance", "shirt"), Crosshair = Wi
 local G = {
     Acc = Tabs.Appearance:AddLeftGroupbox("Accessories"), Body = Tabs.Appearance:AddLeftGroupbox("Body Modifications"), Faces = Tabs.Appearance:AddLeftGroupbox("Faces"),
     Cloth = Tabs.Appearance:AddLeftGroupbox("Clothing (Visual)"), Outfit = Tabs.Appearance:AddLeftGroupbox("Outfit Management"), Anim = Tabs.Appearance:AddLeftGroupbox("Animation"),
-    Emotes = Tabs.Appearance:AddRightGroupbox("Custom Emotes"), NameTag = Tabs.Appearance:AddRightGroupbox("Custom NameTag"), Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
+    Custom = Tabs.Appearance:AddRightGroupbox("Custom Asset Loader 📦"), Emotes = Tabs.Appearance:AddRightGroupbox("Custom Emotes"), NameTag = Tabs.Appearance:AddRightGroupbox("Custom NameTag"), Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
     Tools = Tabs.Useful:AddLeftGroupbox("Tools"), TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"), TitanVis = Tabs.Titan:AddRightGroupbox("Visuals 🎨"),
     CH_Gen = Tabs.Crosshair:AddLeftGroupbox("General"), CH_Col = Tabs.Crosshair:AddLeftGroupbox("Color"), CH_Out = Tabs.Crosshair:AddRightGroupbox("Outline"), CH_Anim = Tabs.Crosshair:AddRightGroupbox("Animation"),
     WM_Gen = Tabs.Watermark:AddLeftGroupbox("General"), WM_Pos = Tabs.Watermark:AddLeftGroupbox("Position"), WM_Out = Tabs.Watermark:AddRightGroupbox("Outline")
@@ -336,6 +341,61 @@ G.Body:AddButton("Reset Limb Colors", function() for g, col in pairs(State.Orig.
 for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do
     G.Cloth:AddDropdown(t .. "Selector", { Values = getKeys(CFG.Clothes[t]), Default = "None", Text = (t == "TShirt" and "T-Shirt" or t), Callback = function(s) CM:Apply(Player.Character, t, s) end })
 end
+
+-- // Feature 3: Custom Asset Loader \ --
+G.Custom:AddInput("CustomAssetID", { Text = "Roblox Asset ID", Placeholder = "Enter Catalog ID..." })
+G.Custom:AddDropdown("CustomAssetType", { Text = "Asset Type", Values = { "Accessory / Hair", "Shirt", "Pants", "T-Shirt" }, Default = "Accessory / Hair" })
+G.Custom:AddButton("Load Asset 🚀", function()
+    local idStr = getOpt("CustomAssetID", "")
+    local cleanId = tonumber(string.match(idStr, "%d+"))
+    if not cleanId then return Library:Notify({ Title = "Loader", Content = "Please enter a valid numeric ID!", Duration = 3 }) end
+    local aType, char = getOpt("CustomAssetType", "Accessory / Hair"), Player.Character
+    if not char then return end
+
+    if aType == "Accessory / Hair" then
+        task.spawn(function()
+            local ok, objs = pcall(game.GetObjects, game, "rbxassetid://" .. cleanId)
+            local item = ok and objs and objs[1]
+            if item then
+                local clone = item:Clone()
+                local acc = clone:IsA("Accessory") and clone or clone:FindFirstChildWhichIsA("Accessory", true)
+                if acc then
+                    acc:SetAttribute("WR_Acc", true)
+                    if weldAcc(char, acc) then table.insert(State.Scripted.CustomAccs, acc) end
+                elseif attachHair(char, clone) then
+                    table.insert(State.Scripted.CustomAccs, clone)
+                end
+                Library:Notify({ Title = "Asset Loader", Content = "Custom item attached!", Duration = 3 })
+            else
+                Library:Notify({ Title = "Asset Loader", Content = "Could not fetch accessory.", Duration = 3 })
+            end
+        end)
+    else
+        local typeMap = { ["Shirt"] = "Shirt", ["Pants"] = "Pants", ["T-Shirt"] = "TShirt" }
+        local tStr = typeMap[aType]
+        local def = CM.Types[tStr]
+        task.spawn(function()
+            local ok, objs = pcall(game.GetObjects, game, "rbxassetid://" .. cleanId)
+            local it = ok and objs and (objs[1]:IsA(def.c) and objs[1] or objs[1]:FindFirstChildWhichIsA(def.c, true))
+            local val = it and it[def.p]
+            if val then
+                safeDestroy(State.Scripted[tStr])
+                local item = Instance.new(def.c) item.Name, item[def.p], item.Parent = "WR_Item", val, char
+                State.Scripted[tStr] = item
+                Library:Notify({ Title = "Asset Loader", Content = aType .. " applied!", Duration = 3 })
+            else
+                Library:Notify({ Title = "Asset Loader", Content = "Invalid clothing ID!", Duration = 3 })
+            end
+        end)
+    end
+end)
+G.Custom:AddButton("Clear Custom Items 🗑️", function()
+    for _, obj in ipairs(State.Scripted.CustomAccs) do safeDestroy(obj) end
+    State.Scripted.CustomAccs = {}
+    for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do safeDestroy(State.Scripted[t]) State.Scripted[t] = nil CM:Apply(Player.Character, t, getOpt(t .. "Selector", "None")) end
+    Library:Notify({ Title = "Asset Loader", Content = "Custom items cleared!", Duration = 3 })
+end)
+
 G.Anim:AddDropdown("AnimationPackSelector", { Values = getKeys(CFG.Anims), Default = "None", Text = "Animation Pack", Callback = function(p) applyAnim(Player.Character, p) end })
 for name, ov in pairs(CFG.Ovr) do G.Anim:AddToggle(ov.k, { Text = name, Default = false, Callback = function() applyAnim(Player.Character, getOpt("AnimationPackSelector", "None")) end }) end
 
@@ -343,15 +403,28 @@ G.Emotes:AddDropdown("EmoteSelector", { Values = getKeys(CFG.Emotes), Default = 
 G.Emotes:AddButton("Play Emote ▶️", function() playEmote(Player.Character, getOpt("EmoteSelector", "None")) end)
 G.Emotes:AddButton("Stop Emote ⏹️", stopEmote)
 
+-- // Feature 1: Throttled NameTag \ --
 G.NameTag:AddInput("NameTagText", { Default = "[VIP]", Text = "Tag Text" })
 G.NameTag:AddLabel("Tag Color"):AddColorPicker("NameTagColor", { Default = Color3.fromRGB(255, 215, 0) })
 G.NameTag:AddToggle("NameTagEnabled", { Text = "Enable NameTag", Default = false, Callback = function(v)
     if State.Conn.Env["NTLoop"] then State.Conn.Env["NTLoop"]:Disconnect() State.Conn.Env["NTLoop"] = nil end
     if v then
+        local lastNTUpdate = 0
         State.Conn.Env["NTLoop"] = RunService.RenderStepped:Connect(function()
-            if not getTog("NameTagEnabled") then return end local tag, col = getOpt("NameTagText", "[VIP]"), (Options.NameTagColor and Options.NameTagColor.Value) or Color3.fromRGB(255, 215, 0)
-            local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") if hum and hum.DisplayName ~= tag .. " " .. Player.Name then hum.DisplayName = tag .. " " .. Player.Name end
-            pcall(function() for _, s in ipairs(Player.PlayerGui.MainGui.main.tos.scroll:GetChildren()) do local nl = s.Name == "sample" and s:FindFirstChild("name") if nl and string.find(nl.Text, Player.Name, 1, true) and not string.find(nl.Text, tag, 1, true) then nl.Text, nl.TextColor3 = tag .. " " .. nl.Text, col end end end)
+            if not getTog("NameTagEnabled") or tick() - lastNTUpdate < 0.5 then return end
+            lastNTUpdate = tick()
+            local tag, col = getOpt("NameTagText", "[VIP]"), (Options.NameTagColor and Options.NameTagColor.Value) or Color3.fromRGB(255, 215, 0)
+            local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.DisplayName ~= tag .. " " .. Player.Name then hum.DisplayName = tag .. " " .. Player.Name end
+            pcall(function()
+                local s = Player.PlayerGui.MainGui.main.tos.scroll
+                for _, sample in ipairs(s:GetChildren()) do
+                    local nl = sample.Name == "sample" and sample:FindFirstChild("name")
+                    if nl and string.find(nl.Text, Player.Name, 1, true) and not string.find(nl.Text, tag, 1, true) then
+                        nl.Text, nl.TextColor3 = tag .. " " .. nl.Text, col
+                    end
+                end
+            end)
         end)
     elseif Player.Character then local h = Player.Character:FindFirstChildOfClass("Humanoid") if h then h.DisplayName = Player.DisplayName end end
 end })
@@ -448,18 +521,57 @@ end })
 
 G.TitanEnv:AddSlider("RainIntensitySlider", { Text = "Rain & Storm Intensity", Default = 50, Min = 10, Max = 100, Rounding = 0, Callback = function(v) local p = Workspace:FindFirstChild("WR_RainPart") local em = p and p:FindFirstChildOfClass("ParticleEmitter") if em then em.Rate, em.Speed = v * 40, NumberRange.new(50 + v) playSafeTween(Lighting, { FogEnd = 700 - (v * 4) }) end end })
 
+-- // Feature 2: Batched & Protected Minecraft Textures Queue \ --
 G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
         local MS = game:GetService("MaterialService")
         local mats = { [Enum.Material.Asphalt]={"11545435992"}, [Enum.Material.Basalt]={"11545440462"}, [Enum.Material.Brick]={"11545453130"}, [Enum.Material.Cobblestone]={"11545460611"}, [Enum.Material.Concrete]={"11545468983"}, [Enum.Material.CorrodedMetal]={"11545476330"}, [Enum.Material.DiamondPlate]={"11545495407"}, [Enum.Material.Fabric]={"118776397"}, [Enum.Material.Grass]={"11545527424"}, [Enum.Material.Ground]={"11545533676"}, [Enum.Material.Ice]={"11546405701"}, [Enum.Material.LeafyGrass]={"11546412010"}, [Enum.Material.Marble]={"11546425898"}, [Enum.Material.Metal]={"11546431794"}, [Enum.Material.Sand]={"11546468464"}, [Enum.Material.Wood]={"11546477504"}, [Enum.Material.WoodPlanks]={"11546480686"} }
         for _, c in ipairs(MS:GetChildren()) do if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end) c:Destroy() end end
         local act = {} for m, ids in pairs(mats) do local v = Instance.new("MaterialVariant", MS) v.Name, v.BaseMaterial, v.ColorMap, v.StudsPerTile = "abs_" .. m.Name, m, "rbxassetid://" .. ids[1], 4 act[m] = v.Name end
-        local function proc(p)
-            if not p:IsA("BasePart") or p:IsA("Terrain") or (p.Parent and p.Parent:FindFirstChildOfClass("Humanoid")) then return end
-            local var = act[p.Material] if var and p.MaterialVariant ~= var then if p:IsA("MeshPart") then p.TextureID = "" end p.MaterialVariant = var for _, d in ipairs(p:GetChildren()) do if d:IsA("Texture") or d:IsA("Decal") then d.Transparency = 1 elseif d:IsA("SurfaceAppearance") then d:Destroy() end end end
+        
+        local partQueue = {}
+        local queueRunning = false
+
+        local function processSinglePart(p)
+            if not p or not p.Parent or not p:IsA("BasePart") or p:IsA("Terrain") or (p.Parent and p.Parent:FindFirstChildOfClass("Humanoid")) then return end
+            local var = act[p.Material]
+            if var and p.MaterialVariant ~= var then
+                if p:IsA("MeshPart") then p.TextureID = "" end
+                p.MaterialVariant = var
+                for _, d in ipairs(p:GetChildren()) do
+                    if d:IsA("Texture") or d:IsA("Decal") then d.Transparency = 1
+                    elseif d:IsA("SurfaceAppearance") then d:Destroy() end
+                end
+            end
         end
-        if State.Conn.Env["MC_Tex"] then State.Conn.Env["MC_Tex"]:Disconnect() end State.Conn.Env["MC_Tex"] = Workspace.DescendantAdded:Connect(proc)
-        for _, d in ipairs(Workspace:GetDescendants()) do proc(d) end Library:Notify({ Title = "System", Content = "MineCraft Textures applied!", Duration = 3 })
+
+        local function startQueueProcessor()
+            if queueRunning then return end
+            queueRunning = true
+            task.spawn(function()
+                while #partQueue > 0 do
+                    local count = math.min(100, #partQueue)
+                    for _ = 1, count do
+                        local p = table.remove(partQueue, 1)
+                        pcall(processSinglePart, p)
+                    end
+                    task.wait(0.03)
+                end
+                queueRunning = false
+            end)
+        end
+
+        if State.Conn.Env["MC_Tex"] then State.Conn.Env["MC_Tex"]:Disconnect() end
+        State.Conn.Env["MC_Tex"] = Workspace.DescendantAdded:Connect(function(p)
+            if p:IsA("BasePart") then
+                table.insert(partQueue, p)
+                startQueueProcessor()
+            end
+        end)
+
+        for _, d in ipairs(Workspace:GetDescendants()) do if d:IsA("BasePart") then table.insert(partQueue, d) end end
+        startQueueProcessor()
+        Library:Notify({ Title = "System", Content = "MineCraft Textures queued safely!", Duration = 3 })
     end)
 end)
 
@@ -490,6 +602,7 @@ local function resetAllUI()
     if Options["AnimationPackSelector"] then Options["AnimationPackSelector"]:SetValue("None") end
     for _, ov in pairs(CFG.Ovr) do if Toggles[ov.k] then Toggles[ov.k]:SetValue(false) end end
     if Options["EmoteSelector"] then Options["EmoteSelector"]:SetValue("None") end
+    for _, obj in ipairs(State.Scripted.CustomAccs) do safeDestroy(obj) end State.Scripted.CustomAccs = {}
     stopEmote()
 end
 
@@ -511,7 +624,7 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
         c:WaitForChild("Humanoid", 3) c:WaitForChild("Head", 5)
         local t0 = tick() while tick() - t0 < 2 and not Player:HasAppearanceLoaded() do task.wait(0.1) end
         if not c.Parent then return end
-        stopEmote() State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil }
+        stopEmote() State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {} }
         State.Orig.Clothing, State.Orig.LimbColors, State.Orig.LimbData, State.Cache.Applied = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}, {}, {}
         captureColors(c, true) pcall(syncChar, c)
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
