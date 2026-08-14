@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V6.7 - Enhanced & Optimized Suite 
-    (NameTag Throttled + Minecraft Queue + Custom Asset Loader)
+    WhiteRose V6.8 - Fixed Headless & Smart Stealth Suite 
+    (Headless Accessory Fix + NameTag Throttle + Minecraft Queue + Custom Asset Loader)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -16,7 +16,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v6.7", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v6.8", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -49,7 +49,7 @@ local function getTog(n) return Toggles[n] and Toggles[n].Value or false end
 local function safeDestroy(o) if o and o.Parent then pcall(function() o:SetAttribute("WR_D", true) for _, d in ipairs(o:GetDescendants()) do d:SetAttribute("WR_D", true) end end) o:Destroy() end end
 local function isR6(c) local h = c and c:FindFirstChildOfClass("Humanoid") return (h and h.RigType == Enum.HumanoidRigType.R6) or (c and c:FindFirstChild("Torso") and not c:FindFirstChild("UpperTorso")) end
 
--- // Accessory Manager (Cloak/Invisibility Fixed) \ --
+-- // Smart Accessory Manager (Fixed Headless & Invisibility) \ --
 local AM = { Conn = {} }
 local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
 
@@ -59,14 +59,37 @@ function AM:Bind(tp, c)
     if not tp or not c then return end
     local function sync()
         if not tp.Parent or not c.Parent then return end
-        local t, l = tp.Transparency, tp.LocalTransparencyModifier
-        for _, d in ipairs(c:GetDescendants()) do
-            if d:IsA("BasePart") then d.Transparency, d.LocalTransparencyModifier = t, l elseif d:IsA("Decal") or d:IsA("Texture") then d.Transparency = t end
+        local char = tp.Parent:IsA("Model") and tp.Parent or (tp.Parent.Parent:IsA("Model") and tp.Parent.Parent or Player.Character)
+        local trans, ltm = tp.Transparency, tp.LocalTransparencyModifier
+
+        -- Smart Headless Check: Don't hide accessories if Headless is enabled unless whole body is cloaked
+        if getTog("Headless") and tp.Name == "Head" and char then
+            local bodyPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
+            if bodyPart and bodyPart.Transparency < 0.95 then
+                trans = bodyPart.Transparency
+                ltm = bodyPart.LocalTransparencyModifier
+            end
         end
-        if c:IsA("BasePart") then c.Transparency, c.LocalTransparencyModifier = t, l end
+
+        for _, d in ipairs(c:GetDescendants()) do
+            if d:IsA("BasePart") then d.Transparency, d.LocalTransparencyModifier = trans, ltm
+            elseif d:IsA("Decal") or d:IsA("Texture") then d.Transparency = trans end
+        end
+        if c:IsA("BasePart") then c.Transparency, c.LocalTransparencyModifier = trans, ltm end
     end
+
     table.insert(self.Conn, tp:GetPropertyChangedSignal("Transparency"):Connect(sync))
     table.insert(self.Conn, tp:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
+
+    if tp.Name == "Head" and tp.Parent then
+        local char = tp.Parent
+        local bodyPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+        if bodyPart then
+            table.insert(self.Conn, bodyPart:GetPropertyChangedSignal("Transparency"):Connect(sync))
+            table.insert(self.Conn, bodyPart:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
+        end
+    end
+
     sync()
 end
 
@@ -128,7 +151,7 @@ function AM:Sync(char, groups)
     if State.Cache.Char == char and State.Cache.Sig == sig then return end
     State.Cache.Char, State.Cache.Sig = char, sig
     self:Clear(char)
-    for _, id in ipairs(ids) do
+    for _, id in ipairs(assetIds or ids) do
         task.spawn(function()
             for _ = 1, 10 do
                 if not char or not char.Parent or State.Cache.Sig ~= sig then return end
@@ -252,8 +275,17 @@ allActions = {
     ["Headless"] = { category = "Body", type = "Function", action = function(c, e)
         local h = c and c:FindFirstChild("Head") if not h then return end
         if not State.Orig.Headless then local sm = h:FindFirstChildOfClass("SpecialMesh") State.Orig.Headless = { t = h.Transparency, s = sm and sm.Scale } end
-        h.Transparency = e and 1 or (State.Orig.Headless.t or 0) local sm = h:FindFirstChildOfClass("SpecialMesh") if sm then sm.Scale = e and Vector3.zero or (State.Orig.Headless.s or Vector3.one) end
+        h.Transparency = e and 1 or (State.Orig.Headless.t or 0)
+        local sm = h:FindFirstChildOfClass("SpecialMesh")
+        if sm then sm.Scale = e and Vector3.zero or (State.Orig.Headless.s or Vector3.one) end
         applyFace(c)
+        -- Re-evaluate accessories so they remain visible
+        for _, child in ipairs(c:GetChildren()) do
+            if child:IsA("Accessory") or child:GetAttribute("WR_Hair") then
+                local b = child:FindFirstChildWhichIsA("BasePart") or child:FindFirstChild("Handle")
+                if b then b.Transparency = 0 b.LocalTransparencyModifier = 0 end
+            end
+        end
     end },
     ["Korblox"] = { category = "Body", type = "Function", action = function(c, e)
         if not (c and c:FindFirstChild("RightLowerLeg")) then return end
@@ -342,7 +374,7 @@ for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do
     G.Cloth:AddDropdown(t .. "Selector", { Values = getKeys(CFG.Clothes[t]), Default = "None", Text = (t == "TShirt" and "T-Shirt" or t), Callback = function(s) CM:Apply(Player.Character, t, s) end })
 end
 
--- // Feature 3: Custom Asset Loader \ --
+-- // Custom Asset Loader \ --
 G.Custom:AddInput("CustomAssetID", { Text = "Roblox Asset ID", Placeholder = "Enter Catalog ID..." })
 G.Custom:AddDropdown("CustomAssetType", { Text = "Asset Type", Values = { "Accessory / Hair", "Shirt", "Pants", "T-Shirt" }, Default = "Accessory / Hair" })
 G.Custom:AddButton("Load Asset 🚀", function()
@@ -403,7 +435,7 @@ G.Emotes:AddDropdown("EmoteSelector", { Values = getKeys(CFG.Emotes), Default = 
 G.Emotes:AddButton("Play Emote ▶️", function() playEmote(Player.Character, getOpt("EmoteSelector", "None")) end)
 G.Emotes:AddButton("Stop Emote ⏹️", stopEmote)
 
--- // Feature 1: Throttled NameTag \ --
+-- // Throttled NameTag \ --
 G.NameTag:AddInput("NameTagText", { Default = "[VIP]", Text = "Tag Text" })
 G.NameTag:AddLabel("Tag Color"):AddColorPicker("NameTagColor", { Default = Color3.fromRGB(255, 215, 0) })
 G.NameTag:AddToggle("NameTagEnabled", { Text = "Enable NameTag", Default = false, Callback = function(v)
@@ -521,11 +553,11 @@ end })
 
 G.TitanEnv:AddSlider("RainIntensitySlider", { Text = "Rain & Storm Intensity", Default = 50, Min = 10, Max = 100, Rounding = 0, Callback = function(v) local p = Workspace:FindFirstChild("WR_RainPart") local em = p and p:FindFirstChildOfClass("ParticleEmitter") if em then em.Rate, em.Speed = v * 40, NumberRange.new(50 + v) playSafeTween(Lighting, { FogEnd = 700 - (v * 4) }) end end })
 
--- // Feature 2: Batched & Protected Minecraft Textures Queue \ --
+-- // Batched & Protected Minecraft Textures Queue \ --
 G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
         local MS = game:GetService("MaterialService")
-        local mats = { [Enum.Material.Asphalt]={"11545435992"}, [Enum.Material.Basalt]={"11545440462"}, [Enum.Material.Brick]={"11545453130"}, [Enum.Material.Cobblestone]={"11545460611"}, [Enum.Material.Concrete]={"11545468983"}, [Enum.Material.CorrodedMetal]={"11545476330"}, [Enum.Material.DiamondPlate]={"11545495407"}, [Enum.Material.Fabric]={"118776397"}, [Enum.Material.Grass]={"11545527424"}, [Enum.Material.Ground]={"11545533676"}, [Enum.Material.Ice]={"11546405701"}, [Enum.Material.LeafyGrass]={"11546412010"}, [Enum.Material.Marble]={"11546425898"}, [Enum.Material.Metal]={"11546431794"}, [Enum.Material.Sand]={"11546468464"}, [Enum.Material.Wood]={"11546477504"}, [Enum.Material.WoodPlanks]={"11546480686"} }
+        local mats = { [Enum.Material.Asphalt]={"11545435992"}, [Enum.Material.Basalt]={"11545440462"}, [Enum.Material.Brick]={"11545435130"}, [Enum.Material.Cobblestone]={"11545460611"}, [Enum.Material.Concrete]={"11545468983"}, [Enum.Material.CorrodedMetal]={"11545476330"}, [Enum.Material.DiamondPlate]={"11545495407"}, [Enum.Material.Fabric]={"118776397"}, [Enum.Material.Grass]={"11545527424"}, [Enum.Material.Ground]={"11545533676"}, [Enum.Material.Ice]={"11546405701"}, [Enum.Material.LeafyGrass]={"11546412010"}, [Enum.Material.Marble]={"11546425898"}, [Enum.Material.Metal]={"11546431794"}, [Enum.Material.Sand]={"11546468464"}, [Enum.Material.Wood]={"11546477504"}, [Enum.Material.WoodPlanks]={"11546480686"} }
         for _, c in ipairs(MS:GetChildren()) do if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end) c:Destroy() end end
         local act = {} for m, ids in pairs(mats) do local v = Instance.new("MaterialVariant", MS) v.Name, v.BaseMaterial, v.ColorMap, v.StudsPerTile = "abs_" .. m.Name, m, "rbxassetid://" .. ids[1], 4 act[m] = v.Name end
         
