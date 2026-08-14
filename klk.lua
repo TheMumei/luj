@@ -1,11 +1,16 @@
 --[[ 
-    WhiteRose V6.9 - Fixed & Restored Minecraft Engine
-    (Full 30 Minecraft Materials + Instant Override + Smart Headless + Custom Loader)
+    WhiteRose V7.0 - Flawless & Fully Restored Master Suite
+    (Full 30 MC Textures + Smart Headless + Auto Hair Bounding Box + Custom Loader + Crosshair)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
-local Players, Lighting, RunService, TweenService, Workspace, UserInputService, GuiService = 
-    game:GetService("Players"), game:GetService("Lighting"), game:GetService("RunService"), game:GetService("TweenService"), game:GetService("Workspace"), game:GetService("UserInputService"), game:GetService("GuiService")
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local function fetch(p) local ok, m = pcall(function() return loadstring(game:HttpGet(repo .. p))() end) return ok and m or nil end
@@ -16,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v6.9", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v7.0", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -35,7 +40,7 @@ local CFG = {
     Emotes = { ["None"] = false, ["Dance 1"] = "rbxassetid://507771019", ["Dance 2"] = "rbxassetid://507771955", ["Dance 3"] = "rbxassetid://507772104", ["Wave / Hello"] = "rbxassetid://507770239", ["Point"] = "rbxassetid://507770453", ["Cheer"] = "rbxassetid://507770677", ["Laugh"] = "rbxassetid://507770818" }
 }
 
--- Complete 30 Minecraft Materials
+-- 30 Full Minecraft Materials
 local MC_MATERIALS = {
     [Enum.Material.Asphalt] = { "11545435992" },
     [Enum.Material.Basalt] = { "11545440462", "9730055481", "7263615718", "7263618080" },
@@ -83,11 +88,34 @@ local function getTog(n) return Toggles[n] and Toggles[n].Value or false end
 local function safeDestroy(o) if o and o.Parent then pcall(function() o:SetAttribute("WR_D", true) for _, d in ipairs(o:GetDescendants()) do d:SetAttribute("WR_D", true) end end) o:Destroy() end end
 local function isR6(c) local h = c and c:FindFirstChildOfClass("Humanoid") return (h and h.RigType == Enum.HumanoidRigType.R6) or (c and c:FindFirstChild("Torso") and not c:FindFirstChild("UpperTorso")) end
 
--- // Smart Accessory Manager (Fixed Headless & Invisibility) \ --
+local function isScriptedItem(inst)
+    local cur = inst
+    while cur and cur ~= game do
+        if (cur:IsA("Accessory") and cur:GetAttribute("WR_Acc")) or cur:GetAttribute("WR_Hair") or cur.Name == "WR_Item" or cur:GetAttribute("WR_Custom") then return true end
+        cur = cur.Parent
+    end
+    return false
+end
+
+-- // Smart Accessory Manager with Bounding Box Calculation \ --
 local AM = { Conn = {} }
 local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
 
 local function makeCosmetic(r) for _, d in ipairs(r:GetDescendants()) do if d:IsA("BasePart") then d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.Massless = false, false, false, false, true end end end
+
+local function computeAutoHairOffset(head, parts, baseCFrame)
+    local inv = baseCFrame:Inverse()
+    local min, max = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+    for _, part in ipairs(parts) do
+        local rel, half = inv * part.CFrame, part.Size / 2
+        for _, sx in ipairs({ -1, 1 }) do for _, sy in ipairs({ -1, 1 }) do for _, sz in ipairs({ -1, 1 }) do
+            local corner = rel:PointToWorldSpace(Vector3.new(half.X * sx, half.Y * sy, half.Z * sz))
+            min = Vector3.new(math.min(min.X, corner.X), math.min(min.Y, corner.Y), math.min(min.Z, corner.Z))
+            max = Vector3.new(math.max(max.X, corner.X), math.max(max.Y, corner.Y), math.max(max.Z, corner.Z))
+        end end end
+    end
+    return CFrame.new(-(min.X + max.X) / 2, (head.Size.Y / 2 + 0.1) - max.Y, -(min.Z + max.Z) / 2)
+end
 
 function AM:Bind(tp, c)
     if not tp or not c then return end
@@ -153,7 +181,7 @@ local function attachHair(char, root)
     local base, bCF = parts[1], parts[1].CFrame
     local attP, att
     for _, p in ipairs(parts) do local a = p:FindFirstChildWhichIsA("Attachment") if a then attP, att = p, a break end end
-    local c0 = att and ((head:FindFirstChild(att.Name) or Instance.new("Attachment", head)).CFrame * att.CFrame:Inverse() * (bCF:Inverse() * attP.CFrame):Inverse()) or CFrame.new(0, (head.Size.Y / 2 + 0.1), 0)
+    local c0 = att and ((head:FindFirstChild(att.Name) or Instance.new("Attachment", head)).CFrame * att.CFrame:Inverse() * (bCF:Inverse() * attP.CFrame):Inverse()) or computeAutoHairOffset(head, parts, bCF)
     local hldr = Instance.new("Folder", char) hldr.Name = "WR_Hair" hldr:SetAttribute("WR_Hair", true)
     for _, p in ipairs(parts) do
         local rel = bCF:Inverse() * p.CFrame
@@ -226,22 +254,36 @@ local function applyFace(c)
 end
 
 local CM = { Hidden = {}, Types = { Shirt = { c = "Shirt", p = "ShirtTemplate" }, Pants = { c = "Pants", p = "PantsTemplate" }, TShirt = { c = "ShirtGraphic", p = "Graphic" } } }
+local function restoreClothing(char, typeStr)
+    local orig = State.Orig.Clothing
+    if typeStr == "TShirt" then for _, it in ipairs(orig.TShirts) do pcall(function() it.Parent = char end) end orig.TShirts = {}
+    elseif orig[typeStr] then pcall(function() orig[typeStr].Parent = char end) orig[typeStr] = nil end
+end
+local function storeClothing(char, typeStr, cls)
+    local orig = State.Orig.Clothing
+    if typeStr == "TShirt" then
+        if #orig.TShirts > 0 then return end
+        for _, it in ipairs(char:GetChildren()) do if it:IsA(cls) and it ~= State.Scripted.TShirt and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then table.insert(orig.TShirts, it) end end
+    elseif not orig[typeStr] then
+        local it = char:FindFirstChildOfClass(cls) if it and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then orig[typeStr] = it end
+    end
+end
+
 function CM:Apply(c, t, name)
     if not c or self.Hidden[t] then return end local def, id = self.Types[t], CFG.Clothes[t][name]
-    if name == "Remove" then safeDestroy(State.Scripted[t]) State.Scripted[t] = nil return end
+    if name == "Remove" then safeDestroy(State.Scripted[t]) State.Scripted[t] = nil storeClothing(c, t, def.c) return end
     local tmpl = id
     if type(id) == "number" then
         local k = def.c .. ":" .. id tmpl = State.Cache.ClothTmpl[k] or (function() local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. id) local it = ok and o and (o[1]:IsA(def.c) and o[1] or o[1]:FindFirstChildWhichIsA(def.c, true)) local val = it and it[def.p] if val then State.Cache.ClothTmpl[k] = val end return val end)()
     end
     safeDestroy(State.Scripted[t]) State.Scripted[t] = nil
-    if not tmpl then if t == "TShirt" then for _, it in ipairs(State.Orig.Clothing.TShirts) do pcall(function() it.Parent = c end) end State.Orig.Clothing.TShirts = {} elseif State.Orig.Clothing[t] then pcall(function() State.Orig.Clothing[t].Parent = c end) State.Orig.Clothing[t] = nil end return end
-    if t == "TShirt" then if #State.Orig.Clothing.TShirts == 0 then for _, it in ipairs(c:GetChildren()) do if it:IsA(def.c) and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then table.insert(State.Orig.Clothing.TShirts, it) end end end
-    elseif not State.Orig.Clothing[t] then local it = c:FindFirstChildOfClass(def.c) if it and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then State.Orig.Clothing[t] = it end end
+    if not tmpl then restoreClothing(c, t) return end
+    storeClothing(c, t, def.c)
     local item = Instance.new(def.c) item.Name, item[def.p], item.Parent = "WR_Item", tmpl, c State.Scripted[t] = item
 end
-function CM:Hide(c, t) if not c or self.Hidden[t] then return end safeDestroy(State.Scripted[t]) State.Scripted[t] = nil self.Hidden[t] = true end
-function CM:Show(c, t) if not self.Hidden[t] then return end self.Hidden[t] = nil self:Apply(c, t, getOpt(t .. "Selector", "None")) end
-function CM:Restore(c) if not c then return end for t in pairs(self.Types) do safeDestroy(State.Scripted[t]) State.Scripted[t] = nil self.Hidden[t] = nil end end
+function CM:Hide(c, t) if not c or self.Hidden[t] then return end safeDestroy(State.Scripted[t]) State.Scripted[t] = nil storeClothing(c, t, self.Types[t].c) self.Hidden[t] = true end
+function CM:Show(c, t) if not self.Hidden[t] then return end self.Hidden[t] = nil restoreClothing(c, t) self:Apply(c, t, getOpt(t .. "Selector", "None")) end
+function CM:Restore(c) if not c then return end for t in pairs(self.Types) do safeDestroy(State.Scripted[t]) State.Scripted[t] = nil restoreClothing(c, t) self.Hidden[t] = nil end end
 
 -- // Animation Core \ --
 local function applyAnim(c, pack)
@@ -294,7 +336,10 @@ local function fullReset(c)
     stopEmote() State.Cache.Sig, State.Cache.Char, State.Cache.Applied = nil, nil, {}
     safeDestroy(State.Scripted.HeadlessMesh)
     if c then
-        CM:Restore(c) AM:Clear(c)
+        CM:Restore(c)
+        for _, a in ipairs(State.Orig.Clothing.Accessories) do if a then pcall(function() a.Parent = c end) end end
+        for _, h in ipairs(State.Orig.Clothing.Hair) do if h then pcall(function() h.Parent = c end) end end
+        AM:Clear(c)
         local h = c:FindFirstChild("Head")
         if h and State.Orig.Headless then h.Transparency = State.Orig.Headless.t or 0 local sm = h:FindFirstChildOfClass("SpecialMesh") if sm and State.Orig.Headless.s then sm.Scale = State.Orig.Headless.s end end
         applyFace(c)
@@ -425,8 +470,10 @@ G.Custom:AddButton("Load Asset 🚀", function()
                 local acc = clone:IsA("Accessory") and clone or clone:FindFirstChildWhichIsA("Accessory", true)
                 if acc then
                     acc:SetAttribute("WR_Acc", true)
+                    acc:SetAttribute("WR_Custom", true)
                     if weldAcc(char, acc) then table.insert(State.Scripted.CustomAccs, acc) end
                 elseif attachHair(char, clone) then
+                    clone:SetAttribute("WR_Custom", true)
                     table.insert(State.Scripted.CustomAccs, clone)
                 end
                 Library:Notify({ Title = "Asset Loader", Content = "Custom item attached!", Duration = 3 })
@@ -585,7 +632,7 @@ end })
 
 G.TitanEnv:AddSlider("RainIntensitySlider", { Text = "Rain & Storm Intensity", Default = 50, Min = 10, Max = 100, Rounding = 0, Callback = function(v) local p = Workspace:FindFirstChild("WR_RainPart") local em = p and p:FindFirstChildOfClass("ParticleEmitter") if em then em.Rate, em.Speed = v * 40, NumberRange.new(50 + v) playSafeTween(Lighting, { FogEnd = 700 - (v * 4) }) end end })
 
--- // Complete & High-Quality Minecraft Textures Engine \ --
+-- // Complete & Instant Minecraft Textures Engine \ --
 G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
         local MS = game:GetService("MaterialService")
@@ -664,13 +711,36 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     end)
 end)
 
+-- // Continuous Universal Sky Enforcement \ --
 G.TitanEnv:AddButton("Enforce Universal Sky", function()
-    local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
-    local sb = { SkyboxBk = "rbxassetid://12216109205", SkyboxDn = "rbxassetid://12216109875", SkyboxFt = "rbxassetid://12216109489", SkyboxLf = "rbxassetid://12216110170", SkyboxRt = "rbxassetid://12216110471", SkyboxUp = "rbxassetid://12216108877" }
-    for p, v in pairs(sb) do sky[p] = v end
-    Lighting.ClockTime, Lighting.Brightness, Lighting.Ambient, Lighting.OutdoorAmbient = 14, 2.0, Color3.fromRGB(135, 140, 150), Color3.fromRGB(135, 140, 150)
-    for _, d in ipairs(Lighting:GetChildren()) do if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then d:Destroy() end end
-    Library:Notify({ Title = "System", Content = "Universal Sky applied!", Duration = 3 })
+    local skyBox = { SkyboxBk = "rbxassetid://12216109205", SkyboxDn = "rbxassetid://12216109875", SkyboxFt = "rbxassetid://12216109489", SkyboxLf = "rbxassetid://12216110170", SkyboxRt = "rbxassetid://12216110471", SkyboxUp = "rbxassetid://12216108877" }
+    local skyObject
+
+    local function enforceSky()
+        if not skyObject or not skyObject.Parent then skyObject = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting) end
+        for p, v in pairs(skyBox) do if skyObject[p] ~= v then skyObject[p] = v end end
+        if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
+        if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
+        Lighting.Ambient = Color3.fromRGB(135, 140, 150)
+        Lighting.OutdoorAmbient = Color3.fromRGB(135, 140, 150)
+    end
+
+    for _, d in ipairs(Lighting:GetChildren()) do
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then d:Destroy() end
+    end
+    enforceSky()
+
+    if State.Conn.Env["Sky1"] then State.Conn.Env["Sky1"]:Disconnect() end
+    if State.Conn.Env["Sky2"] then State.Conn.Env["Sky2"]:Disconnect() end
+
+    State.Conn.Env["Sky1"] = Lighting.ChildAdded:Connect(function(d)
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then
+            task.defer(function() pcall(function() d:Destroy() end) end)
+        end
+    end)
+    State.Conn.Env["Sky2"] = RunService.RenderStepped:Connect(enforceSky)
+
+    Library:Notify({ Title = "System", Content = "Universal Sky enforced continuously!", Duration = 3 })
 end)
 
 G.TitanVis:AddButton("Activate RTX Day Mode ☀️", function()
@@ -716,7 +786,7 @@ G.Tools:AddButton("Unload Script", function()
     getgenv().WhiteRoseLoaded = nil Library:Unload()
 end)
 
--- // Lifecycle \ --
+-- // Character LifeCycle \ --
 State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     task.spawn(function()
         c:WaitForChild("Humanoid", 3) c:WaitForChild("Head", 5)
@@ -725,9 +795,10 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
         stopEmote() State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {} }
         State.Orig.Clothing, State.Orig.LimbColors, State.Orig.LimbData, State.Cache.Applied = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}, {}, {}
         captureColors(c, true) pcall(syncChar, c)
+
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
         State.Conn.Env["AppEnforce"] = c.DescendantAdded:Connect(function(d)
-            if not d.Parent or d:GetAttribute("WR_Refreshing") or d:IsA("Tool") or d:FindFirstAncestorWhichIsA("Tool") or d:GetAttribute("WR_Acc") or d:GetAttribute("WR_Hair") or d.Name == "WR_Item" then return end
+            if not d.Parent or d:GetAttribute("WR_Refreshing") or d:IsA("Tool") or d:FindFirstAncestorWhichIsA("Tool") or isScriptedItem(d) then return end
             task.wait() if d.Parent and (d:IsA("Clothing") or d:IsA("ShirtGraphic") or d:IsA("Accessory") or d:IsA("BodyColors") or d:IsA("Decal") or d:IsA("SpecialMesh")) then syncChar(c) end
         end)
     end)
