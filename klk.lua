@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V7.0 - Flawless & Fully Restored Master Suite
-    (Full 30 MC Textures + Smart Headless + Auto Hair Bounding Box + Custom Loader + Crosshair)
+    WhiteRose V7.1 - 100% Leak-Free & Optimized Suite
+    (Zero Memory Leaks + Fixed Headless + Full 30 MC Textures + Custom Loader + Crosshair)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v7.0", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v7.1 [Leak-Free]", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -74,18 +74,37 @@ local MC_MATERIALS = {
     [Enum.Material.WoodPlanks] = { "11546480686", "8676581022" }
 }
 
--- // State & Helper Functions \ --
+-- // State & Memory Management \ --
 local allActions = {}
 local State = {
     Orig = { LimbColors = {}, Sound = {}, Lighting = {}, Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, LimbData = {} },
-    Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil, CustomAccs = {} },
-    Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {} }
+    Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil, CustomAccs = {}, SkyObject = nil },
+    Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {} },
+    CharGen = 0
 }
 
 local function getKeys(t) local k = {} for i in pairs(t) do table.insert(k, i) end table.sort(k) return k end
 local function getOpt(n, d) return (Options[n] and Options[n].Value ~= nil) and Options[n].Value or d end
 local function getTog(n) return Toggles[n] and Toggles[n].Value or false end
-local function safeDestroy(o) if o and o.Parent then pcall(function() o:SetAttribute("WR_D", true) for _, d in ipairs(o:GetDescendants()) do d:SetAttribute("WR_D", true) end end) o:Destroy() end end
+
+local function safeDestroy(o)
+    if o and typeof(o) == "Instance" then
+        pcall(function()
+            o:SetAttribute("WR_D", true)
+            for _, d in ipairs(o:GetDescendants()) do d:SetAttribute("WR_D", true) end
+            o:Destroy()
+        end)
+    end
+end
+
+local function cleanTableInstances(tbl)
+    if not tbl then return end
+    for k, v in pairs(tbl) do
+        if typeof(v) == "Instance" then safeDestroy(v)
+        elseif type(v) == "table" then cleanTableInstances(v) end
+    end
+end
+
 local function isR6(c) local h = c and c:FindFirstChildOfClass("Humanoid") return (h and h.RigType == Enum.HumanoidRigType.R6) or (c and c:FindFirstChild("Torso") and not c:FindFirstChild("UpperTorso")) end
 
 local function isScriptedItem(inst)
@@ -97,7 +116,29 @@ local function isScriptedItem(inst)
     return false
 end
 
--- // Smart Accessory Manager with Bounding Box Calculation \ --
+-- // Leak-Free Tween Manager \ --
+local activeTweens = setmetatable({}, { __mode = "k" })
+local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+
+local function playSafeTween(inst, props)
+    if not inst then return end
+    local oldTw = activeTweens[inst]
+    if oldTw then
+        pcall(function() oldTw:Cancel() oldTw:Destroy() end)
+        activeTweens[inst] = nil
+    end
+    local tw = TweenService:Create(inst, tweenInfo, props)
+    activeTweens[inst] = tw
+    tw.Completed:Connect(function()
+        if activeTweens[inst] == tw then
+            pcall(function() tw:Destroy() end)
+            activeTweens[inst] = nil
+        end
+    end)
+    tw:Play()
+end
+
+-- // Smart Accessory Manager \ --
 local AM = { Conn = {} }
 local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
 
@@ -194,7 +235,8 @@ local function attachHair(char, root)
 end
 
 function AM:Clear(char)
-    for _, c in ipairs(self.Conn) do pcall(function() c:Disconnect() end) end self.Conn = {}
+    for _, c in ipairs(self.Conn) do pcall(function() c:Disconnect() end) end
+    self.Conn = {}
     if not char then return end
     for _, c in ipairs(char:GetChildren()) do
         if (c:IsA("Accessory") and c:GetAttribute("WR_Acc")) or c:GetAttribute("WR_Hair") then
@@ -308,7 +350,14 @@ local function applyAnim(c, pack)
     end)
 end
 
-local function stopEmote() if State.Scripted.CurrentEmote then pcall(function() State.Scripted.CurrentEmote:Stop() end) State.Scripted.CurrentEmote = nil end if State.Conn.EmoteStop then State.Conn.EmoteStop:Disconnect() State.Conn.EmoteStop = nil end end
+local function stopEmote()
+    if State.Scripted.CurrentEmote then
+        pcall(function() State.Scripted.CurrentEmote:Stop() State.Scripted.CurrentEmote:Destroy() end)
+        State.Scripted.CurrentEmote = nil
+    end
+    if State.Conn.EmoteStop then State.Conn.EmoteStop:Disconnect() State.Conn.EmoteStop = nil end
+end
+
 local function playEmote(c, name)
     stopEmote() local hum, id = c and c:FindFirstChildOfClass("Humanoid"), CFG.Emotes[name] if not hum or not id then return end
     task.spawn(function()
@@ -333,8 +382,11 @@ local function syncChar(c)
 end
 
 local function fullReset(c)
-    stopEmote() State.Cache.Sig, State.Cache.Char, State.Cache.Applied = nil, nil, {}
+    stopEmote()
+    State.Cache.Sig, State.Cache.Char, State.Cache.Applied = nil, nil, {}
     safeDestroy(State.Scripted.HeadlessMesh)
+    safeDestroy(State.Scripted.SkyObject) State.Scripted.SkyObject = nil
+    
     if c then
         CM:Restore(c)
         for _, a in ipairs(State.Orig.Clothing.Accessories) do if a then pcall(function() a.Parent = c end) end end
@@ -343,7 +395,10 @@ local function fullReset(c)
         local h = c:FindFirstChild("Head")
         if h and State.Orig.Headless then h.Transparency = State.Orig.Headless.t or 0 local sm = h:FindFirstChildOfClass("SpecialMesh") if sm and State.Orig.Headless.s then sm.Scale = State.Orig.Headless.s end end
         applyFace(c)
+    else
+        cleanTableInstances(State.Orig.Clothing)
     end
+
     State.Orig.Clothing, State.Orig.LimbData = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}
     applyAnim(c, "None")
 end
@@ -614,12 +669,10 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
 end)
 
 -- // Titan Engine Tools \ --
-local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-local function playSafeTween(inst, props) if inst then TweenService:Create(inst, tweenInfo, props):Play() end end
 local function getEffect(cls, name) local e = Lighting:FindFirstChild(name) or Instance.new(cls, Lighting) e.Name = name return e end
 
 G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false, Callback = function(en)
-    pcall(function() RunService:UnbindFromRenderStep("WR_Rain") end) local old = Workspace:FindFirstChild("WR_RainPart") if old then old:Destroy() end
+    pcall(function() RunService:UnbindFromRenderStep("WR_Rain") end) local old = Workspace:FindFirstChild("WR_RainPart") if old then safeDestroy(old) end
     if not en then Lighting.FogStart = 0 playSafeTween(Lighting, { FogEnd = 100000, FogColor = Color3.fromRGB(190, 190, 190) }) return end
     task.spawn(function()
         local p = Instance.new("Part", Workspace) p.Name, p.Size, p.Transparency, p.CanCollide, p.Anchored = "WR_RainPart", Vector3.new(200, 1, 200), 1, false, true
@@ -639,7 +692,7 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
         for _, c in ipairs(MS:GetChildren()) do
             if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then
                 pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
-                c:Destroy()
+                safeDestroy(c)
             end
         end
 
@@ -670,7 +723,7 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
                 if p:IsA("MeshPart") then p.TextureID = "" end
                 for _, d in ipairs(p:GetChildren()) do
                     if d:IsA("Texture") or d:IsA("Decal") then d.Transparency = 1
-                    elseif d:IsA("SurfaceAppearance") then d:Destroy() end
+                    elseif d:IsA("SurfaceAppearance") then safeDestroy(d) end
                 end
             end
         end
@@ -714,11 +767,13 @@ end)
 -- // Continuous Universal Sky Enforcement \ --
 G.TitanEnv:AddButton("Enforce Universal Sky", function()
     local skyBox = { SkyboxBk = "rbxassetid://12216109205", SkyboxDn = "rbxassetid://12216109875", SkyboxFt = "rbxassetid://12216109489", SkyboxLf = "rbxassetid://12216110170", SkyboxRt = "rbxassetid://12216110471", SkyboxUp = "rbxassetid://12216108877" }
-    local skyObject
 
     local function enforceSky()
-        if not skyObject or not skyObject.Parent then skyObject = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting) end
-        for p, v in pairs(skyBox) do if skyObject[p] ~= v then skyObject[p] = v end end
+        if not State.Scripted.SkyObject or not State.Scripted.SkyObject.Parent then
+            State.Scripted.SkyObject = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
+        end
+        local sky = State.Scripted.SkyObject
+        for p, v in pairs(skyBox) do if sky[p] ~= v then sky[p] = v end end
         if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
         if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
         Lighting.Ambient = Color3.fromRGB(135, 140, 150)
@@ -726,7 +781,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky", function()
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then d:Destroy() end
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
     end
     enforceSky()
 
@@ -735,7 +790,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky", function()
 
     State.Conn.Env["Sky1"] = Lighting.ChildAdded:Connect(function(d)
         if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then
-            task.defer(function() pcall(function() d:Destroy() end) end)
+            task.defer(function() safeDestroy(d) end)
         end
     end)
     State.Conn.Env["Sky2"] = RunService.RenderStepped:Connect(enforceSky)
@@ -768,31 +823,43 @@ end
 G.Tools:AddButton("Reset All", function() resetAllUI() fullReset(Player.Character) end)
 G.Tools:AddButton("Unload Script", function()
     if State.Conn.CrosshairRender then State.Conn.CrosshairRender:Disconnect() State.Conn.CrosshairRender = nil end
-    if chContainer then chContainer:Destroy() end if wmObject then wmObject:Destroy() end
+    if chContainer then safeDestroy(chContainer) end if wmObject then safeDestroy(wmObject) end
     for _, c in pairs(State.Conn.Env) do if c then pcall(function() c:Disconnect() end) end end
-    local rPart = Workspace:FindFirstChild("WR_RainPart") if rPart then rPart:Destroy() end
+    local rPart = Workspace:FindFirstChild("WR_RainPart") if rPart then safeDestroy(rPart) end
     pcall(function() RunService:UnbindFromRenderStep("WR_Rain") end)
 
     local MS = game:GetService("MaterialService")
     for _, c in ipairs(MS:GetChildren()) do
         if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then
             pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
-            c:Destroy()
+            safeDestroy(c)
         end
     end
 
+    cleanTableInstances(State.Cache.AccTmpl)
+    cleanTableInstances(State.Cache.ClothTmpl)
+    State.Cache.AccTmpl, State.Cache.ClothTmpl = {}, {}
+
     resetAllUI() fullReset(Player.Character)
-    if State.Conn.CharacterAdded then State.Conn.CharacterAdded:Disconnect() end
+    if State.Conn.CharacterAdded then State.Conn.CharacterAdded:Disconnect() State.Conn.CharacterAdded = nil end
     getgenv().WhiteRoseLoaded = nil Library:Unload()
 end)
 
 -- // Character LifeCycle \ --
 State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
+    State.CharGen = State.CharGen + 1
+    local curGen = State.CharGen
+
     task.spawn(function()
         c:WaitForChild("Humanoid", 3) c:WaitForChild("Head", 5)
         local t0 = tick() while tick() - t0 < 2 and not Player:HasAppearanceLoaded() do task.wait(0.1) end
-        if not c.Parent then return end
-        stopEmote() State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {} }
+        if not c.Parent or State.CharGen ~= curGen then return end
+
+        stopEmote()
+        AM:Clear(Player.Character)
+        cleanTableInstances(State.Orig.Clothing)
+
+        State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {}, SkyObject = nil }
         State.Orig.Clothing, State.Orig.LimbColors, State.Orig.LimbData, State.Cache.Applied = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}, {}, {}
         captureColors(c, true) pcall(syncChar, c)
 
