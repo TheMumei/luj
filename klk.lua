@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V7.7 - Pixel-Perfect Centered Crosshair Suite
-    (Fixed Center Offset + Zero Inset Drift + Classic Fog + Smart Headless + 30 MC Textures + Custom Loader)
+    WhiteRose V7.8 - Universal R6 & R15 Korblox Suite
+    (Dual R6/R15 Korblox + Centered Crosshair + Classic Fog + Smart Headless + 30 MC Textures)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Precision | v7.7", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Universal | v7.8", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -386,7 +386,7 @@ local function fullReset(c)
     applyAnim(c, "None")
 end
 
--- // Action Handlers \ --
+-- // Action Handlers (With Universal R6/R15 Korblox) \ --
 allActions = {
     ["Headless"] = { category = "Body", type = "Function", action = function(c, e)
         local h = c and c:FindFirstChild("Head") if not h then return end
@@ -403,12 +403,89 @@ allActions = {
         end
     end },
     ["Korblox"] = { category = "Body", type = "Function", action = function(c, e)
-        if not (c and c:FindFirstChild("RightLowerLeg")) then return end
-        if e then
-            if not State.Orig.LimbData["Korblox"] then State.Orig.LimbData["Korblox"] = { lm = c.RightLowerLeg.MeshId, lt = c.RightLowerLeg.Transparency, um = c.RightUpperLeg.MeshId, ut = c.RightUpperLeg.TextureID, fm = c.RightFoot.MeshId, ft = c.RightFoot.Transparency } end
-            c.RightLowerLeg.MeshId, c.RightLowerLeg.Transparency, c.RightUpperLeg.MeshId, c.RightUpperLeg.TextureID, c.RightFoot.MeshId, c.RightFoot.Transparency = CFG.IDs.KorbloxLeg, 1, CFG.IDs.KorbloxUpper, CFG.IDs.KorbloxTex, CFG.IDs.KorbloxFoot, 1
+        if not c then return end
+        local is_r6 = isR6(c)
+
+        if is_r6 then
+            -- // R6 Universal Handling \\ --
+            local rLeg = c:FindFirstChild("Right Leg")
+            if not rLeg then return end
+
+            if e then
+                if not State.Orig.LimbData["Korblox_R6"] then
+                    local oldCM
+                    for _, cm in ipairs(c:GetChildren()) do
+                        if cm:IsA("CharacterMesh") and cm.BodyPart == Enum.BodyPart.RightLeg then
+                            oldCM = cm
+                            break
+                        end
+                    end
+                    local oldMesh = rLeg:FindFirstChildOfClass("SpecialMesh")
+                    State.Orig.LimbData["Korblox_R6"] = {
+                        oldCM = oldCM,
+                        oldMeshId = oldMesh and oldMesh.MeshId,
+                        oldTexId = oldMesh and oldMesh.TextureId,
+                        oldScale = oldMesh and oldMesh.Scale
+                    }
+                end
+
+                for _, cm in ipairs(c:GetChildren()) do
+                    if cm:IsA("CharacterMesh") and cm.BodyPart == Enum.BodyPart.RightLeg then
+                        cm.Parent = nil
+                    end
+                end
+
+                local mesh = rLeg:FindFirstChild("WR_KorbloxMesh") or rLeg:FindFirstChildOfClass("SpecialMesh")
+                if not mesh then
+                    mesh = Instance.new("SpecialMesh")
+                    mesh.Name = "WR_KorbloxMesh"
+                    mesh.Parent = rLeg
+                end
+                mesh.MeshType = Enum.MeshType.FileMesh
+                mesh.MeshId = "rbxassetid://101851696"
+                mesh.TextureId = "rbxassetid://101851254"
+                mesh.Scale = Vector3.new(1, 1, 1)
+                rLeg.Transparency = 0
+            else
+                local o = State.Orig.LimbData["Korblox_R6"]
+                local mesh = rLeg:FindFirstChild("WR_KorbloxMesh") or rLeg:FindFirstChildOfClass("SpecialMesh")
+                if mesh then
+                    if o and o.oldMeshId then
+                        mesh.MeshId = o.oldMeshId
+                        mesh.TextureId = o.oldTexId or ""
+                        mesh.Scale = o.oldScale or Vector3.one
+                    else
+                        safeDestroy(mesh)
+                    end
+                end
+                if o and o.oldCM then
+                    pcall(function() o.oldCM.Parent = c end)
+                end
+                State.Orig.LimbData["Korblox_R6"] = nil
+            end
         else
-            local o = State.Orig.LimbData["Korblox"] if o then c.RightLowerLeg.MeshId, c.RightLowerLeg.Transparency, c.RightUpperLeg.MeshId, c.RightUpperLeg.TextureID, c.RightFoot.MeshId, c.RightFoot.Transparency = o.lm, o.lt, o.um, o.ut, o.fm, o.ft end
+            -- // R15 Handling \\ --
+            if not (c:FindFirstChild("RightLowerLeg") and c:FindFirstChild("RightUpperLeg") and c:FindFirstChild("RightFoot")) then return end
+            if e then
+                if not State.Orig.LimbData["Korblox_R15"] then
+                    State.Orig.LimbData["Korblox_R15"] = {
+                        lm = c.RightLowerLeg.MeshId, lt = c.RightLowerLeg.Transparency,
+                        um = c.RightUpperLeg.MeshId, ut = c.RightUpperLeg.TextureID,
+                        fm = c.RightFoot.MeshId, ft = c.RightFoot.Transparency
+                    }
+                end
+                c.RightLowerLeg.MeshId, c.RightLowerLeg.Transparency = CFG.IDs.KorbloxLeg, 1
+                c.RightUpperLeg.MeshId, c.RightUpperLeg.TextureID = CFG.IDs.KorbloxUpper, CFG.IDs.KorbloxTex
+                c.RightFoot.MeshId, c.RightFoot.Transparency = CFG.IDs.KorbloxFoot, 1
+            else
+                local o = State.Orig.LimbData["Korblox_R15"]
+                if o then
+                    c.RightLowerLeg.MeshId, c.RightLowerLeg.Transparency = o.lm, o.lt
+                    c.RightUpperLeg.MeshId, c.RightUpperLeg.TextureID = o.um, o.ut
+                    c.RightFoot.MeshId, c.RightFoot.Transparency = o.fm, o.ft
+                    State.Orig.LimbData["Korblox_R15"] = nil
+                end
+            end
         end
     end },
     ["Naked"] = { category = "Body", type = "Function", action = function(c, e) for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do if e then CM:Hide(c, t) else CM:Show(c, t) end end end },
