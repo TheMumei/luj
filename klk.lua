@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V7.1 - 100% Leak-Free & Optimized Suite
-    (Zero Memory Leaks + Fixed Headless + Full 30 MC Textures + Custom Loader + Crosshair)
+    WhiteRose V7.2 - Ultra RTX & Visuals Master Suite
+    (Upgraded RTX Engine + Smart Headless + Full 30 MC Textures + Custom Loader + Crosshair)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Crosshair | v7.1 [Leak-Free]", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & RTX Ultra | v7.2", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -42,36 +42,16 @@ local CFG = {
 
 -- 30 Full Minecraft Materials
 local MC_MATERIALS = {
-    [Enum.Material.Asphalt] = { "11545435992" },
-    [Enum.Material.Basalt] = { "11545440462", "9730055481", "7263615718", "7263618080" },
-    [Enum.Material.Brick] = { "11545453130", "9888913739" },
-    [Enum.Material.Cobblestone] = { "11545460611", "9730055481" },
-    [Enum.Material.Concrete] = { "11545468983", "7800894670", "9406005008", "8868470905" },
-    [Enum.Material.CorrodedMetal] = { "11545476330", "6920910334" },
-    [Enum.Material.CrackedLava] = { "11545484781", "2842360263" },
-    [Enum.Material.DiamondPlate] = { "11545495407", "152572134" },
-    [Enum.Material.Fabric] = { "118776397" },
-    [Enum.Material.Foil] = { "11545501473", "6928057336" },
-    [Enum.Material.Glacier] = { "11545521725", "2167946571" },
-    [Enum.Material.Granite] = { "11545524005", "151776555" },
-    [Enum.Material.Grass] = { "11545527424" },
-    [Enum.Material.Ground] = { "11545533676", "7069953551" },
-    [Enum.Material.Ice] = { "11546405701", "152528023" },
-    [Enum.Material.LeafyGrass] = { "11546412010", "7069955228" },
-    [Enum.Material.Limestone] = { "11546415687", "10180605826" },
-    [Enum.Material.Marble] = { "11546425898", "7247387416" },
-    [Enum.Material.Metal] = { "11546431794", "152572134" },
-    [Enum.Material.Mud] = { "11546437412" },
-    [Enum.Material.Pavement] = { "11546440685", "8139086777" },
-    [Enum.Material.Pebble] = { "11546453485", "151776533" },
-    [Enum.Material.Rock] = { "11546456858" },
-    [Enum.Material.Salt] = { "11546461451", "6756014847" },
-    [Enum.Material.Sand] = { "11546468464" },
-    [Enum.Material.Sandstone] = { "11546471860", "152572221" },
-    [Enum.Material.Slate] = { "11546474778" },
-    [Enum.Material.Snow] = { "11108916253" },
-    [Enum.Material.Wood] = { "11546477504" },
-    [Enum.Material.WoodPlanks] = { "11546480686", "8676581022" }
+    [Enum.Material.Asphalt] = { "11545435992" }, [Enum.Material.Basalt] = { "11545440462", "9730055481" }, [Enum.Material.Brick] = { "11545453130" },
+    [Enum.Material.Cobblestone] = { "11545460611" }, [Enum.Material.Concrete] = { "11545468983" }, [Enum.Material.CorrodedMetal] = { "11545476330" },
+    [Enum.Material.CrackedLava] = { "11545484781" }, [Enum.Material.DiamondPlate] = { "11545495407" }, [Enum.Material.Fabric] = { "118776397" },
+    [Enum.Material.Foil] = { "11545501473" }, [Enum.Material.Glacier] = { "11545521725" }, [Enum.Material.Granite] = { "11545524005" },
+    [Enum.Material.Grass] = { "11545527424" }, [Enum.Material.Ground] = { "11545533676" }, [Enum.Material.Ice] = { "11546405701" },
+    [Enum.Material.LeafyGrass] = { "11546412010" }, [Enum.Material.Limestone] = { "11546415687" }, [Enum.Material.Marble] = { "11546425898" },
+    [Enum.Material.Metal] = { "11546431794" }, [Enum.Material.Mud] = { "11546437412" }, [Enum.Material.Pavement] = { "11546440685" },
+    [Enum.Material.Pebble] = { "11546453485" }, [Enum.Material.Rock] = { "11546456858" }, [Enum.Material.Salt] = { "11546461451" },
+    [Enum.Material.Sand] = { "11546468464" }, [Enum.Material.Sandstone] = { "11546471860" }, [Enum.Material.Slate] = { "11546474778" },
+    [Enum.Material.Snow] = { "11108916253" }, [Enum.Material.Wood] = { "11546477504" }, [Enum.Material.WoodPlanks] = { "11546480686" }
 }
 
 -- // State & Memory Management \ --
@@ -123,10 +103,7 @@ local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection
 local function playSafeTween(inst, props)
     if not inst then return end
     local oldTw = activeTweens[inst]
-    if oldTw then
-        pcall(function() oldTw:Cancel() oldTw:Destroy() end)
-        activeTweens[inst] = nil
-    end
+    if oldTw then pcall(function() oldTw:Cancel() oldTw:Destroy() end) activeTweens[inst] = nil end
     local tw = TweenService:Create(inst, tweenInfo, props)
     activeTweens[inst] = tw
     tw.Completed:Connect(function()
@@ -482,7 +459,7 @@ local G = {
     Acc = Tabs.Appearance:AddLeftGroupbox("Accessories"), Body = Tabs.Appearance:AddLeftGroupbox("Body Modifications"), Faces = Tabs.Appearance:AddLeftGroupbox("Faces"),
     Cloth = Tabs.Appearance:AddLeftGroupbox("Clothing (Visual)"), Outfit = Tabs.Appearance:AddLeftGroupbox("Outfit Management"), Anim = Tabs.Appearance:AddLeftGroupbox("Animation"),
     Custom = Tabs.Appearance:AddRightGroupbox("Custom Asset Loader 📦"), Emotes = Tabs.Appearance:AddRightGroupbox("Custom Emotes"), NameTag = Tabs.Appearance:AddRightGroupbox("Custom NameTag"), Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
-    Tools = Tabs.Useful:AddLeftGroupbox("Tools"), TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"), TitanVis = Tabs.Titan:AddRightGroupbox("Visuals 🎨"),
+    Tools = Tabs.Useful:AddLeftGroupbox("Tools"), TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"), TitanVis = Tabs.Titan:AddRightGroupbox("RTX & Visuals 🎨"),
     CH_Gen = Tabs.Crosshair:AddLeftGroupbox("General"), CH_Col = Tabs.Crosshair:AddLeftGroupbox("Color"), CH_Out = Tabs.Crosshair:AddRightGroupbox("Outline"), CH_Anim = Tabs.Crosshair:AddRightGroupbox("Animation"),
     WM_Gen = Tabs.Watermark:AddLeftGroupbox("General"), WM_Pos = Tabs.Watermark:AddLeftGroupbox("Position"), WM_Out = Tabs.Watermark:AddRightGroupbox("Outline")
 }
@@ -798,11 +775,93 @@ G.TitanEnv:AddButton("Enforce Universal Sky", function()
     Library:Notify({ Title = "System", Content = "Universal Sky enforced continuously!", Duration = 3 })
 end)
 
-G.TitanVis:AddButton("Activate RTX Day Mode ☀️", function()
-    local atm, blm, sun, col, blr = getEffect("Atmosphere", "MyRTX_Atmosphere"), getEffect("BloomEffect", "MyRTX_Bloom"), getEffect("SunRaysEffect", "MyRTX_SunRays"), getEffect("ColorCorrectionEffect", "MyRTX_Color"), getEffect("BlurEffect", "MyRTX_Blur")
-    sun.Spread = 0.2 playSafeTween(Lighting, { ClockTime = 14, Brightness = 3, Ambient = Color3.fromRGB(170, 170, 170), OutdoorAmbient = Color3.fromRGB(210, 210, 210), FogColor = Color3.fromRGB(255, 245, 230), FogStart = 300, FogEnd = 1000 })
-    playSafeTween(atm, { Color = Color3.fromRGB(199, 199, 199), Decay = Color3.fromRGB(106, 112, 125) }) playSafeTween(sun, { Intensity = 0.1 }) playSafeTween(blm, { Intensity = 1.0, Threshold = 0.8, Size = 24 }) playSafeTween(col, { Saturation = 0, Contrast = 0, TintColor = Color3.fromRGB(255, 255, 255) }) playSafeTween(blr, { Size = 0 })
-    Library:Notify({ Title = "Visuals", Content = "RTX Day Mode Applied!", Duration = 3 })
+-- // Advanced & Upgraded RTX Engine \ --
+local function applyRTXPreset(mode)
+    local atm = getEffect("Atmosphere", "MyRTX_Atmosphere")
+    local blm = getEffect("BloomEffect", "MyRTX_Bloom")
+    local sun = getEffect("SunRaysEffect", "MyRTX_SunRays")
+    local col = getEffect("ColorCorrectionEffect", "MyRTX_Color")
+    local blr = getEffect("BlurEffect", "MyRTX_Blur")
+
+    -- Enable PBR Reflections & Contact Shadows
+    Lighting.GlobalShadows = true
+    Lighting.ShadowSoftness = 0.2
+    Lighting.EnvironmentDiffuseScale = 1
+    Lighting.EnvironmentSpecularScale = 1
+    pcall(function() Lighting.Technology = Enum.Technology.Future end)
+
+    if mode == "Day" then
+        playSafeTween(Lighting, {
+            ClockTime = 14.5, Brightness = 2.4, GeographicLatitude = 41.7,
+            Ambient = Color3.fromRGB(45, 45, 52), OutdoorAmbient = Color3.fromRGB(85, 90, 100),
+            FogColor = Color3.fromRGB(215, 225, 240), FogStart = 500, FogEnd = 2500, ExposureCompensation = 0.05
+        })
+        playSafeTween(atm, { Density = 0.28, Offset = 0.25, Haze = 0.5, Glare = 0.4, Color = Color3.fromRGB(195, 210, 235), Decay = Color3.fromRGB(105, 115, 135) })
+        playSafeTween(sun, { Intensity = 0.12, Spread = 0.35 })
+        playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 0.4), Size = 16, Threshold = 0.88 })
+        playSafeTween(col, { Brightness = 0.02, Contrast = getOpt("RTXContrastSlider", 0.15), Saturation = getOpt("RTXSaturationSlider", 0.18), TintColor = Color3.fromRGB(255, 252, 248) })
+    elseif mode == "Sunset" then
+        playSafeTween(Lighting, {
+            ClockTime = 17.6, Brightness = 2.8, GeographicLatitude = 65,
+            Ambient = Color3.fromRGB(35, 25, 30), OutdoorAmbient = Color3.fromRGB(115, 75, 55),
+            FogColor = Color3.fromRGB(255, 170, 120), FogStart = 200, FogEnd = 1800, ExposureCompensation = 0.1
+        })
+        playSafeTween(atm, { Density = 0.35, Offset = 0.4, Haze = 1.2, Glare = 1.0, Color = Color3.fromRGB(255, 160, 110), Decay = Color3.fromRGB(180, 80, 50) })
+        playSafeTween(sun, { Intensity = 0.25, Spread = 0.6 })
+        playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 0.6), Size = 22, Threshold = 0.8 })
+        playSafeTween(col, { Brightness = 0.03, Contrast = getOpt("RTXContrastSlider", 0.2), Saturation = getOpt("RTXSaturationSlider", 0.3), TintColor = Color3.fromRGB(255, 235, 215) })
+    elseif mode == "Night" then
+        playSafeTween(Lighting, {
+            ClockTime = 0, Brightness = 1.2, GeographicLatitude = 41.7,
+            Ambient = Color3.fromRGB(18, 20, 28), OutdoorAmbient = Color3.fromRGB(25, 30, 45),
+            FogColor = Color3.fromRGB(15, 18, 30), FogStart = 100, FogEnd = 1200, ExposureCompensation = 0
+        })
+        playSafeTween(atm, { Density = 0.45, Offset = 0.1, Haze = 0.8, Glare = 0, Color = Color3.fromRGB(20, 25, 45), Decay = Color3.fromRGB(10, 15, 30) })
+        playSafeTween(sun, { Intensity = 0, Spread = 0.1 })
+        playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 1.0), Size = 24, Threshold = 0.72 })
+        playSafeTween(col, { Brightness = 0, Contrast = getOpt("RTXContrastSlider", 0.22), Saturation = getOpt("RTXSaturationSlider", 0.22), TintColor = Color3.fromRGB(210, 230, 255) })
+    end
+    playSafeTween(blr, { Size = 0 })
+end
+
+G.TitanVis:AddButton("Activate RTX Ultra Day ☀️", function() applyRTXPreset("Day") Library:Notify({ Title = "RTX Engine", Content = "RTX Ultra Day Mode Applied!", Duration = 3 }) end)
+G.TitanVis:AddButton("Activate RTX Golden Sunset 🌅", function() applyRTXPreset("Sunset") Library:Notify({ Title = "RTX Engine", Content = "RTX Golden Sunset Applied!", Duration = 3 }) end)
+G.TitanVis:AddButton("Activate RTX Cyberpunk Night 🌙", function() applyRTXPreset("Night") Library:Notify({ Title = "RTX Engine", Content = "RTX Cyberpunk Night Applied!", Duration = 3 }) end)
+
+G.TitanVis:AddSlider("RTXBloomSlider", {
+    Text = "Bloom Glow Intensity", Default = 0.4, Min = 0, Max = 2, Rounding = 2,
+    Callback = function(v)
+        local blm = Lighting:FindFirstChild("MyRTX_Bloom")
+        if blm and blm:IsA("BloomEffect") then playSafeTween(blm, { Intensity = v }) end
+    end
+})
+
+G.TitanVis:AddSlider("RTXSaturationSlider", {
+    Text = "Color Vibrance / Saturation", Default = 0.2, Min = -0.5, Max = 1, Rounding = 2,
+    Callback = function(v)
+        local col = Lighting:FindFirstChild("MyRTX_Color")
+        if col and col:IsA("ColorCorrectionEffect") then playSafeTween(col, { Saturation = v }) end
+    end
+})
+
+G.TitanVis:AddSlider("RTXContrastSlider", {
+    Text = "Dynamic Range Contrast", Default = 0.18, Min = -0.2, Max = 0.6, Rounding = 2,
+    Callback = function(v)
+        local col = Lighting:FindFirstChild("MyRTX_Color")
+        if col and col:IsA("ColorCorrectionEffect") then playSafeTween(col, { Contrast = v }) end
+    end
+})
+
+G.TitanVis:AddButton("Reset Lighting to Default 🔄", function()
+    for _, d in ipairs(Lighting:GetChildren()) do
+        if string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+    end
+    playSafeTween(Lighting, {
+        ClockTime = 14, Brightness = 2, Ambient = Color3.fromRGB(128, 128, 128),
+        OutdoorAmbient = Color3.fromRGB(128, 128, 128), FogEnd = 100000, ExposureCompensation = 0,
+        EnvironmentDiffuseScale = 0, EnvironmentSpecularScale = 0
+    })
+    Library:Notify({ Title = "RTX Engine", Content = "Lighting reset to normal.", Duration = 3 })
 end)
 
 -- // Tools & Keybinds \ --
@@ -834,6 +893,10 @@ G.Tools:AddButton("Unload Script", function()
             pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
             safeDestroy(c)
         end
+    end
+
+    for _, d in ipairs(Lighting:GetChildren()) do
+        if string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
     end
 
     cleanTableInstances(State.Cache.AccTmpl)
