@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V7.3 - Clean RTX & Fog-Protected Suite
-    (Rain Fog Protection + Golden Sunset Removed + Smart Headless + Full 30 MC Textures + Custom Loader)
+    WhiteRose V7.4 - Dual-Engine Visible Fog & RTX Suite
+    (Atmosphere Density Fog + Rain Particle Sync + Smart Headless + Full 30 MC Textures + Custom Loader)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & RTX | v7.3", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & RTX | v7.4 [Visible Fog]", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -98,7 +98,7 @@ end
 
 -- // Leak-Free Tween Manager \ --
 local activeTweens = setmetatable({}, { __mode = "k" })
-local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+local tweenInfo = TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 
 local function playSafeTween(inst, props)
     if not inst then return end
@@ -113,6 +113,62 @@ local function playSafeTween(inst, props)
         end
     end)
     tw:Play()
+end
+
+local function getEffect(cls, name)
+    local e = Lighting:FindFirstChild(name)
+    if not e then
+        e = Instance.new(cls, Lighting)
+        e.Name = name
+    end
+    return e
+end
+
+-- // Unified Dual-Engine Fog Controller \ --
+local function updateFogState(isRain, intensity)
+    intensity = intensity or getOpt("RainIntensitySlider", 50)
+    local atm = Lighting:FindFirstChild("MyRTX_Atmosphere") or Lighting:FindFirstChildOfClass("Atmosphere")
+
+    if isRain then
+        -- 1. Legacy Fog Properties
+        Lighting.FogStart = 0
+        playSafeTween(Lighting, {
+            FogColor = Color3.fromRGB(160, 165, 175),
+            FogEnd = math.max(60, 550 - (intensity * 4.5))
+        })
+
+        -- 2. Modern Atmosphere Volumetric Fog (Guarantees visible dense fog with RTX)
+        if not atm then atm = getEffect("Atmosphere", "MyRTX_Atmosphere") end
+        local dens = math.clamp(0.40 + (intensity / 100) * 0.45, 0.40, 0.88)
+        local haze = 1.5 + (intensity / 100) * 4.0
+
+        playSafeTween(atm, {
+            Density = dens,
+            Haze = haze,
+            Color = Color3.fromRGB(155, 160, 170),
+            Decay = Color3.fromRGB(110, 115, 125),
+            Glare = 0,
+            Offset = 0.1
+        })
+    else
+        -- Clear Fog
+        Lighting.FogStart = 0
+        playSafeTween(Lighting, {
+            FogEnd = 100000,
+            FogColor = Color3.fromRGB(190, 190, 190)
+        })
+        if atm and string.match(atm.Name, "^MyRTX_") then
+            local isNight = (Lighting.ClockTime < 6 or Lighting.ClockTime > 18)
+            playSafeTween(atm, {
+                Density = isNight and 0.45 or 0.28,
+                Haze = isNight and 0.8 or 0.5,
+                Glare = isNight and 0 or 0.4,
+                Color = isNight and Color3.fromRGB(20, 25, 45) or Color3.fromRGB(195, 210, 235),
+                Decay = isNight and Color3.fromRGB(10, 15, 30) or Color3.fromRGB(105, 115, 135),
+                Offset = isNight and 0.1 or 0.25
+            })
+        end
+    end
 end
 
 -- // Smart Accessory Manager \ --
@@ -646,22 +702,33 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
 end)
 
 -- // Titan Engine Tools \ --
-local function getEffect(cls, name) local e = Lighting:FindFirstChild(name) or Instance.new(cls, Lighting) e.Name = name return e end
-
 G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false, Callback = function(en)
-    pcall(function() RunService:UnbindFromRenderStep("WR_Rain") end) local old = Workspace:FindFirstChild("WR_RainPart") if old then safeDestroy(old) end
+    pcall(function() RunService:UnbindFromRenderStep("WR_Rain") end)
+    local old = Workspace:FindFirstChild("WR_RainPart")
+    if old then safeDestroy(old) end
+
     if not en then
-        Lighting.FogStart = 0
-        playSafeTween(Lighting, { FogEnd = 100000, FogColor = Color3.fromRGB(190, 190, 190) })
+        updateFogState(false)
         return
     end
+
     task.spawn(function()
-        local p = Instance.new("Part", Workspace) p.Name, p.Size, p.Transparency, p.CanCollide, p.Anchored = "WR_RainPart", Vector3.new(200, 1, 200), 1, false, true
-        local em = Instance.new("ParticleEmitter", p) em.Texture, em.Color, em.LightEmission, em.Orientation, em.Size, em.EmissionDirection = "rbxassetid://241868005", ColorSequence.new(Color3.fromRGB(200, 200, 215)), 1, Enum.ParticleOrientation.FacingCameraWorldUp, NumberSequence.new(5), Enum.NormalId.Bottom
-        local int = getOpt("RainIntensitySlider", 50) em.Rate, em.Speed, em.Lifetime = int * 40, NumberRange.new(50 + int), NumberRange.new(1.2)
-        RunService:BindToRenderStep("WR_Rain", Enum.RenderPriority.Camera.Value + 1, function() local c = Workspace.CurrentCamera if c and p.Parent then p.Position = c.CFrame.Position + Vector3.new(0, 70, 0) end end)
-        Lighting.FogStart = 0
-        playSafeTween(Lighting, { FogColor = Color3.fromRGB(155, 160, 165), FogEnd = 700 - (int * 4) })
+        local p = Instance.new("Part", Workspace)
+        p.Name, p.Size, p.Transparency, p.CanCollide, p.Anchored = "WR_RainPart", Vector3.new(200, 1, 200), 1, false, true
+        local em = Instance.new("ParticleEmitter", p)
+        em.Texture = "rbxassetid://241868005"
+        em.Color = ColorSequence.new(Color3.fromRGB(200, 200, 215))
+        em.LightEmission, em.Orientation, em.Size, em.EmissionDirection = 1, Enum.ParticleOrientation.FacingCameraWorldUp, NumberSequence.new(5), Enum.NormalId.Bottom
+        
+        local int = getOpt("RainIntensitySlider", 50)
+        em.Rate, em.Speed, em.Lifetime = int * 40, NumberRange.new(50 + int), NumberRange.new(1.2)
+        
+        RunService:BindToRenderStep("WR_Rain", Enum.RenderPriority.Camera.Value + 1, function()
+            local c = Workspace.CurrentCamera
+            if c and p.Parent then p.Position = c.CFrame.Position + Vector3.new(0, 70, 0) end
+        end)
+        
+        updateFogState(true, int)
     end)
 end })
 
@@ -670,7 +737,9 @@ G.TitanEnv:AddSlider("RainIntensitySlider", { Text = "Rain & Storm Intensity", D
     local em = p and p:FindFirstChildOfClass("ParticleEmitter")
     if em then
         em.Rate, em.Speed = v * 40, NumberRange.new(50 + v)
-        playSafeTween(Lighting, { FogEnd = 700 - (v * 4) })
+    end
+    if getTog("RainToggle") then
+        updateFogState(true, v)
     end
 end })
 
@@ -801,41 +870,41 @@ local function applyRTXPreset(mode)
     Lighting.EnvironmentSpecularScale = 1
     pcall(function() Lighting.Technology = Enum.Technology.Future end)
 
-    local isRainActive = getTog("RainToggle")
+    local isRain = getTog("RainToggle")
 
     if mode == "Day" then
-        local lightingProps = {
+        playSafeTween(Lighting, {
             ClockTime = 14.5, Brightness = 2.4, GeographicLatitude = 41.7,
             Ambient = Color3.fromRGB(45, 45, 52), OutdoorAmbient = Color3.fromRGB(85, 90, 100),
             ExposureCompensation = 0.05
-        }
-        if not isRainActive then
-            lightingProps.FogColor = Color3.fromRGB(215, 225, 240)
-            lightingProps.FogStart = 500
-            lightingProps.FogEnd = 2500
-        end
-        playSafeTween(Lighting, lightingProps)
-        playSafeTween(atm, { Density = 0.28, Offset = 0.25, Haze = 0.5, Glare = 0.4, Color = Color3.fromRGB(195, 210, 235), Decay = Color3.fromRGB(105, 115, 135) })
+        })
         playSafeTween(sun, { Intensity = 0.12, Spread = 0.35 })
         playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 0.4), Size = 16, Threshold = 0.88 })
         playSafeTween(col, { Brightness = 0.02, Contrast = getOpt("RTXContrastSlider", 0.15), Saturation = getOpt("RTXSaturationSlider", 0.18), TintColor = Color3.fromRGB(255, 252, 248) })
 
+        if isRain then
+            updateFogState(true, getOpt("RainIntensitySlider", 50))
+        else
+            playSafeTween(Lighting, { FogColor = Color3.fromRGB(215, 225, 240), FogStart = 500, FogEnd = 2500 })
+            playSafeTween(atm, { Density = 0.28, Offset = 0.25, Haze = 0.5, Glare = 0.4, Color = Color3.fromRGB(195, 210, 235), Decay = Color3.fromRGB(105, 115, 135) })
+        end
+
     elseif mode == "Night" then
-        local lightingProps = {
+        playSafeTween(Lighting, {
             ClockTime = 0, Brightness = 1.2, GeographicLatitude = 41.7,
             Ambient = Color3.fromRGB(18, 20, 28), OutdoorAmbient = Color3.fromRGB(25, 30, 45),
             ExposureCompensation = 0
-        }
-        if not isRainActive then
-            lightingProps.FogColor = Color3.fromRGB(15, 18, 30)
-            lightingProps.FogStart = 100
-            lightingProps.FogEnd = 1200
-        end
-        playSafeTween(Lighting, lightingProps)
-        playSafeTween(atm, { Density = 0.45, Offset = 0.1, Haze = 0.8, Glare = 0, Color = Color3.fromRGB(20, 25, 45), Decay = Color3.fromRGB(10, 15, 30) })
+        })
         playSafeTween(sun, { Intensity = 0, Spread = 0.1 })
         playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 1.0), Size = 24, Threshold = 0.72 })
         playSafeTween(col, { Brightness = 0, Contrast = getOpt("RTXContrastSlider", 0.22), Saturation = getOpt("RTXSaturationSlider", 0.22), TintColor = Color3.fromRGB(210, 230, 255) })
+
+        if isRain then
+            updateFogState(true, getOpt("RainIntensitySlider", 50))
+        else
+            playSafeTween(Lighting, { FogColor = Color3.fromRGB(15, 18, 30), FogStart = 100, FogEnd = 1200 })
+            playSafeTween(atm, { Density = 0.45, Offset = 0.1, Haze = 0.8, Glare = 0, Color = Color3.fromRGB(20, 25, 45), Decay = Color3.fromRGB(10, 15, 30) })
+        end
     end
     playSafeTween(blr, { Size = 0 })
 end
@@ -876,12 +945,8 @@ G.TitanVis:AddButton("Reset Lighting to Default 🔄", function()
         OutdoorAmbient = Color3.fromRGB(128, 128, 128), ExposureCompensation = 0,
         EnvironmentDiffuseScale = 0, EnvironmentSpecularScale = 0
     }
-    if not getTog("RainToggle") then
-        resetProps.FogEnd = 100000
-        resetProps.FogStart = 0
-        resetProps.FogColor = Color3.fromRGB(190, 190, 190)
-    end
     playSafeTween(Lighting, resetProps)
+    updateFogState(getTog("RainToggle"), getOpt("RainIntensitySlider", 50))
     Library:Notify({ Title = "RTX Engine", Content = "Lighting reset to normal.", Duration = 3 })
 end)
 
