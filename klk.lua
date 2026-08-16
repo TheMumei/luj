@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V7.5 - Restored Classic Fog & RTX Suite
-    (Original Classic Fog Formula + Smart Headless + Full 30 MC Textures + Custom Loader + Crosshair)
+    WhiteRose V7.6 - Razor Precision Crosshair & Master Suite
+    (Optimized Outward Crosshair + Classic Fog + Smart Headless + 30 MC Textures + Custom Loader)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Classic Fog | v7.5", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Precision Crosshair | v7.6", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -117,10 +117,7 @@ end
 
 local function getEffect(cls, name)
     local e = Lighting:FindFirstChild(name)
-    if not e then
-        e = Instance.new(cls, Lighting)
-        e.Name = name
-    end
+    if not e then e = Instance.new(cls, Lighting) e.Name = name end
     return e
 end
 
@@ -620,12 +617,26 @@ G.WM_Pos:AddSlider("WatermarkOffsetY", { Text = "Offset Y", Default = 30, Min = 
 G.WM_Out:AddToggle("WatermarkOutlineEnable", { Text = "Enable Outline", Default = true })
 G.WM_Out:AddLabel("Outline Color"):AddColorPicker("WatermarkOutlineColor", { Default = Color3.new(0, 0, 0) })
 
--- // Crosshair & Watermark Render Loop \ --
+-- // High-Precision Cached Crosshair & Watermark Elements \ --
 local ScreenGui = Library.ScreenGui or game:GetService("CoreGui"):FindFirstChild("Obsidian") or Instance.new("ScreenGui", game:GetService("CoreGui"))
-local chContainer = Instance.new("Frame", ScreenGui) chContainer.Name, chContainer.BackgroundTransparency, chContainer.Size = "CHContainer", 1, UDim2.new(1, 0, 1, 0)
-local wmObject = Instance.new("TextLabel", ScreenGui) wmObject.Name, wmObject.AnchorPoint, wmObject.BackgroundTransparency, wmObject.ZIndex = "WMObject", Vector2.new(0.5, 0.5), 1, 2
-local chFrames = {} for i = 1, 16 do local f = Instance.new("Frame", chContainer) f.AnchorPoint, f.Visible = Vector2.new(0.5, 0.5), false Instance.new("UIStroke", f) table.insert(chFrames, f) end
+local chContainer = Instance.new("Frame", ScreenGui)
+chContainer.Name, chContainer.BackgroundTransparency, chContainer.Size = "CHContainer", 1, UDim2.new(1, 0, 1, 0)
 
+local wmObject = Instance.new("TextLabel", ScreenGui)
+wmObject.Name, wmObject.AnchorPoint, wmObject.BackgroundTransparency, wmObject.ZIndex = "WMObject", Vector2.new(0.5, 0.5), 1, 2
+
+local chElements = {}
+for i = 1, 16 do
+    local f = Instance.new("Frame", chContainer)
+    f.AnchorPoint = Vector2.new(0.5, 1) -- Fixed Outward Expansion Pivot
+    f.Visible = false
+    local st = Instance.new("UIStroke", f)
+    st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    st.LineJoinMode = Enum.LineJoinMode.Miter
+    table.insert(chElements, { frame = f, stroke = st })
+end
+
+-- // High-Performance & Sharp Render Loop \ --
 State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
     if not Options.CrosshairRadius then return end
     local _t, mLoc, gIns = tick(), UserInputService:GetMouseLocation(), GuiService:GetGuiInset()
@@ -635,22 +646,55 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
     local col = getTog("CrosshairRainbow") and Color3.fromHSV((_t * getOpt("CrosshairRainbowSpeed", 0.3)) % 1, 1, 1) or (Options.CrosshairColor and Options.CrosshairColor.Value or Color3.new(1, 1, 1))
 
     if chEn then
-        local lines, rad, rotEn, pulseEn = getOpt("CrosshairLines", 4), getOpt("CrosshairRadius", 85), getTog("CrosshairRotateEnable"), getTog("CrosshairPulseEnable")
-        local len = pulseEn and (getOpt("CrosshairPulseMin", 30) + ((getOpt("CrosshairPulseMax", 55) - getOpt("CrosshairPulseMin", 30)) * ((math.sin(math.rad(_t * getOpt("CrosshairPulseSpeed", 150))) + 1) / 2))) or getOpt("CrosshairBaseLength", 55)
-        for idx, f in ipairs(chFrames) do
+        local lines = getOpt("CrosshairLines", 4)
+        local rad = getOpt("CrosshairRadius", 85)
+        local width = getOpt("CrosshairWidth", 2)
+        local rotEn = getTog("CrosshairRotateEnable")
+        local rotSpeed = getOpt("CrosshairRotateSpeed", 150)
+        local pulseEn = getTog("CrosshairPulseEnable")
+        local pulseSpeed = getOpt("CrosshairPulseSpeed", 150)
+        local baseLen = getOpt("CrosshairBaseLength", 55)
+        local pulseMin = getOpt("CrosshairPulseMin", 30)
+        local pulseMax = getOpt("CrosshairPulseMax", 55)
+        local outEn = getTog("CrosshairOutlineEnable")
+        local outThick = getOpt("CrosshairOutlineThickness", 1)
+        local outCol = (Options.CrosshairOutlineColor and Options.CrosshairOutlineColor.Value) or Color3.new(0, 0, 0)
+
+        local len = pulseEn and (pulseMin + ((pulseMax - pulseMin) * ((math.sin(math.rad(_t * pulseSpeed)) + 1) / 2))) or baseLen
+        local rotOffset = rotEn and (_t * rotSpeed % 360) or 0
+
+        for idx = 1, 16 do
+            local el = chElements[idx]
+            local f, st = el.frame, el.stroke
             if idx <= lines then
-                f.Visible = true local ang = (idx - 1) * (360 / lines)
-                if rotEn then ang = ang + TweenService:GetValue((- _t * getOpt("CrosshairRotateSpeed", 150) % 360) / 360, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut) * 360 end
+                f.Visible = true
+                local ang = (idx - 1) * (360 / lines) + rotOffset
                 local rAng = math.rad(ang)
-                f.Position, f.Size, f.Rotation, f.BackgroundColor3 = UDim2.new(0, (mLoc.X + math.sin(rAng) * rad) - gIns.X, 0, (mLoc.Y + math.cos(rAng) * rad) - gIns.Y), UDim2.new(0, getOpt("CrosshairWidth", 2), 0, len), -ang, col
-                local st = f:FindFirstChildOfClass("UIStroke") if st then st.Enabled, st.Thickness, st.Color = getTog("CrosshairOutlineEnable"), getOpt("CrosshairOutlineThickness", 1), (Options.CrosshairOutlineColor and Options.CrosshairOutlineColor.Value or Color3.new(0,0,0)) end
-            else f.Visible = false end
+                local px = math.round(finalM.X + math.sin(rAng) * rad)
+                local py = math.round(finalM.Y + math.cos(rAng) * rad)
+
+                f.Position = UDim2.fromOffset(px, py)
+                f.Size = UDim2.fromOffset(math.round(width), math.round(len))
+                f.Rotation = -ang
+                f.BackgroundColor3 = col
+
+                st.Enabled = outEn
+                st.Thickness = outThick
+                st.Color = outCol
+            else
+                f.Visible = false
+            end
         end
     end
+
     if wmEn then
-        wmObject.Text, wmObject.TextSize, wmObject.Font, wmObject.TextColor3 = getOpt("WatermarkText", "Talkingband"), getOpt("WatermarkSize", 16), Enum.Font[getOpt("WatermarkFont", "SourceSansBold")] or Enum.Font.SourceSansBold, col
-        wmObject.TextStrokeColor3, wmObject.TextStrokeTransparency = (Options.WatermarkOutlineColor and Options.WatermarkOutlineColor.Value or Color3.new(0,0,0)), getTog("WatermarkOutlineEnable") and 0 or 1
-        wmObject.Position = UDim2.fromOffset(finalM.X + getOpt("WatermarkOffsetX", 0), finalM.Y + getOpt("WatermarkOffsetY", 30))
+        wmObject.Text = getOpt("WatermarkText", "Talkingband")
+        wmObject.TextSize = getOpt("WatermarkSize", 16)
+        wmObject.Font = Enum.Font[getOpt("WatermarkFont", "SourceSansBold")] or Enum.Font.SourceSansBold
+        wmObject.TextColor3 = col
+        wmObject.TextStrokeColor3 = (Options.WatermarkOutlineColor and Options.WatermarkOutlineColor.Value) or Color3.new(0, 0, 0)
+        wmObject.TextStrokeTransparency = getTog("WatermarkOutlineEnable") and 0 or 1
+        wmObject.Position = UDim2.fromOffset(math.round(finalM.X + getOpt("WatermarkOffsetX", 0)), math.round(finalM.Y + getOpt("WatermarkOffsetY", 30)))
     end
 end)
 
@@ -722,7 +766,6 @@ G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false
             FogEnd = 700 - (intensity * 4)
         })
 
-        -- Clear any heavy Atmosphere density so Classic Fog displays with 100% crisp visibility
         local atm = Lighting:FindFirstChild("MyRTX_Atmosphere") or Lighting:FindFirstChildOfClass("Atmosphere")
         if atm then
             playSafeTween(atm, { Density = 0, Haze = 0 })
