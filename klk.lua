@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V7.6 - Razor Precision Crosshair & Master Suite
-    (Optimized Outward Crosshair + Classic Fog + Smart Headless + 30 MC Textures + Custom Loader)
+    WhiteRose V7.7 - Pixel-Perfect Centered Crosshair Suite
+    (Fixed Center Offset + Zero Inset Drift + Classic Fog + Smart Headless + 30 MC Textures + Custom Loader)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Precision Crosshair | v7.6", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Precision | v7.7", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -628,7 +628,7 @@ wmObject.Name, wmObject.AnchorPoint, wmObject.BackgroundTransparency, wmObject.Z
 local chElements = {}
 for i = 1, 16 do
     local f = Instance.new("Frame", chContainer)
-    f.AnchorPoint = Vector2.new(0.5, 1) -- Fixed Outward Expansion Pivot
+    f.AnchorPoint = Vector2.new(0.5, 0.5)
     f.Visible = false
     local st = Instance.new("UIStroke", f)
     st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -636,11 +636,14 @@ for i = 1, 16 do
     table.insert(chElements, { frame = f, stroke = st })
 end
 
--- // High-Performance & Sharp Render Loop \ --
+-- // High-Performance & Accurate Render Loop \ --
 State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
     if not Options.CrosshairRadius then return end
-    local _t, mLoc, gIns = tick(), UserInputService:GetMouseLocation(), GuiService:GetGuiInset()
+    local _t = tick()
+    local mLoc = UserInputService:GetMouseLocation()
+    local gIns = ScreenGui.IgnoreGuiInset and Vector2.zero or GuiService:GetGuiInset()
     local finalM = mLoc - gIns
+
     local chEn, wmEn = getTog("CrosshairEnable"), getTog("WatermarkEnable")
     chContainer.Visible, wmObject.Visible = chEn, wmEn
     local col = getTog("CrosshairRainbow") and Color3.fromHSV((_t * getOpt("CrosshairRainbowSpeed", 0.3)) % 1, 1, 1) or (Options.CrosshairColor and Options.CrosshairColor.Value or Color3.new(1, 1, 1))
@@ -662,6 +665,7 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
 
         local len = pulseEn and (pulseMin + ((pulseMax - pulseMin) * ((math.sin(math.rad(_t * pulseSpeed)) + 1) / 2))) or baseLen
         local rotOffset = rotEn and (_t * rotSpeed % 360) or 0
+        local distFromCenter = rad + (len / 2)
 
         for idx = 1, 16 do
             local el = chElements[idx]
@@ -670,8 +674,8 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
                 f.Visible = true
                 local ang = (idx - 1) * (360 / lines) + rotOffset
                 local rAng = math.rad(ang)
-                local px = math.round(finalM.X + math.sin(rAng) * rad)
-                local py = math.round(finalM.Y + math.cos(rAng) * rad)
+                local px = math.round(finalM.X + math.sin(rAng) * distFromCenter)
+                local py = math.round(finalM.Y + math.cos(rAng) * distFromCenter)
 
                 f.Position = UDim2.fromOffset(px, py)
                 f.Size = UDim2.fromOffset(math.round(width), math.round(len))
