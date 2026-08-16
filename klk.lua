@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V7.8 - Universal R6 & R15 Korblox Suite
-    (Dual R6/R15 Korblox + Centered Crosshair + Classic Fog + Smart Headless + 30 MC Textures)
+    WhiteRose V7.9 - Universal Leaderboard NameTag Suite
+    (Universal Leaderboard & Overhead NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Universal | v7.8", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Universal NameTag | v7.9", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -364,12 +364,117 @@ local function syncChar(c)
     applyAnim(c, getOpt("AnimationPackSelector", "None"))
 end
 
+-- // Universal NameTag Engine (Overhead + CoreGui Leaderboard + Custom Leaderboards) \ --
+local function restoreNameTags()
+    local pName, pDisplay = Player.Name, Player.DisplayName
+    if Player.Character then
+        local h = Player.Character:FindFirstChildOfClass("Humanoid")
+        if h then h.DisplayName = pDisplay end
+        for _, d in ipairs(Player.Character:GetDescendants()) do
+            if d:IsA("TextLabel") and d:GetAttribute("WR_OrigText") then
+                d.Text = d:GetAttribute("WR_OrigText")
+                if d:GetAttribute("WR_OrigCol") then d.TextColor3 = d:GetAttribute("WR_OrigCol") end
+                d:SetAttribute("WR_OrigText", nil)
+                d:SetAttribute("WR_OrigCol", nil)
+            end
+        end
+    end
+    pcall(function()
+        local coreGui = game:GetService("CoreGui")
+        for _, d in ipairs(coreGui:GetDescendants()) do
+            if d:IsA("TextLabel") and d:GetAttribute("WR_OrigText") then
+                d.Text = d:GetAttribute("WR_OrigText")
+                if d:GetAttribute("WR_OrigCol") then d.TextColor3 = d:GetAttribute("WR_OrigCol") end
+                d:SetAttribute("WR_OrigText", nil)
+                d:SetAttribute("WR_OrigCol", nil)
+            end
+        end
+    end)
+    pcall(function()
+        for _, d in ipairs(Player.PlayerGui:GetDescendants()) do
+            if d:IsA("TextLabel") and d:GetAttribute("WR_OrigText") then
+                d.Text = d:GetAttribute("WR_OrigText")
+                if d:GetAttribute("WR_OrigCol") then d.TextColor3 = d:GetAttribute("WR_OrigCol") end
+                d:SetAttribute("WR_OrigText", nil)
+                d:SetAttribute("WR_OrigCol", nil)
+            end
+        end
+    end)
+end
+
+local function updateUniversalNameTag()
+    local tag = getOpt("NameTagText", "[VIP]")
+    local col = (Options.NameTagColor and Options.NameTagColor.Value) or Color3.fromRGB(255, 215, 0)
+    local pName, pDisplay = Player.Name, Player.DisplayName
+    local formattedName = tag .. " " .. pDisplay
+    local char = Player.Character
+
+    -- 1. Humanoid DisplayName
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.DisplayName ~= formattedName then hum.DisplayName = formattedName end
+
+        -- 2. Custom Overhead BillboardGuis in Character
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("BillboardGui") then
+                for _, lbl in ipairs(d:GetDescendants()) do
+                    if lbl:IsA("TextLabel") and (lbl.Text == pName or lbl.Text == pDisplay or string.find(lbl.Text, pName, 1, true)) and not string.find(lbl.Text, tag, 1, true) then
+                        if not lbl:GetAttribute("WR_OrigText") then
+                            lbl:SetAttribute("WR_OrigText", lbl.Text)
+                            lbl:SetAttribute("WR_OrigCol", lbl.TextColor3)
+                        end
+                        lbl.Text = tag .. " " .. lbl.Text
+                        lbl.TextColor3 = col
+                    end
+                end
+            end
+        end
+    end
+
+    -- 3. CoreGui Roblox Official Leaderboard (PlayerList)
+    pcall(function()
+        local coreGui = game:GetService("CoreGui")
+        local pList = coreGui:FindFirstChild("PlayerList") or coreGui:FindFirstChild("PlayerListMaster")
+        if pList then
+            for _, lbl in ipairs(pList:GetDescendants()) do
+                if lbl:IsA("TextLabel") and (lbl.Text == pName or lbl.Text == pDisplay or lbl.Text == "@" .. pName) and not string.find(lbl.Text, tag, 1, true) then
+                    if not lbl:GetAttribute("WR_OrigText") then
+                        lbl:SetAttribute("WR_OrigText", lbl.Text)
+                        lbl:SetAttribute("WR_OrigCol", lbl.TextColor3)
+                    end
+                    lbl.Text = tag .. " " .. lbl.Text
+                    lbl.TextColor3 = col
+                end
+            end
+        end
+    end)
+
+    -- 4. Custom Game In-Game Leaderboards (PlayerGui)
+    pcall(function()
+        for _, gui in ipairs(Player.PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name ~= "Obsidian" and gui.Name ~= "WhiteRose" then
+                for _, lbl in ipairs(gui:GetDescendants()) do
+                    if lbl:IsA("TextLabel") and (lbl.Text == pName or lbl.Text == pDisplay or string.find(lbl.Text, pName, 1, true)) and not string.find(lbl.Text, tag, 1, true) then
+                        if not lbl:GetAttribute("WR_OrigText") then
+                            lbl:SetAttribute("WR_OrigText", lbl.Text)
+                            lbl:SetAttribute("WR_OrigCol", lbl.TextColor3)
+                        end
+                        lbl.Text = tag .. " " .. lbl.Text
+                        lbl.TextColor3 = col
+                    end
+                end
+            end
+        end
+    end)
+end
+
 local function fullReset(c)
     stopEmote()
     State.Cache.Sig, State.Cache.Char, State.Cache.Applied = nil, nil, {}
     safeDestroy(State.Scripted.HeadlessMesh)
     safeDestroy(State.Scripted.SkyObject) State.Scripted.SkyObject = nil
-    
+    restoreNameTags()
+
     if c then
         CM:Restore(c)
         for _, a in ipairs(State.Orig.Clothing.Accessories) do if a then pcall(function() a.Parent = c end) end end
@@ -407,7 +512,6 @@ allActions = {
         local is_r6 = isR6(c)
 
         if is_r6 then
-            -- // R6 Universal Handling \\ --
             local rLeg = c:FindFirstChild("Right Leg")
             if not rLeg then return end
 
@@ -464,7 +568,6 @@ allActions = {
                 State.Orig.LimbData["Korblox_R6"] = nil
             end
         else
-            -- // R15 Handling \\ --
             if not (c:FindFirstChild("RightLowerLeg") and c:FindFirstChild("RightUpperLeg") and c:FindFirstChild("RightFoot")) then return end
             if e then
                 if not State.Orig.LimbData["Korblox_R15"] then
@@ -541,7 +644,7 @@ local Tabs = { Appearance = Window:AddTab("Appearance", "shirt"), Crosshair = Wi
 local G = {
     Acc = Tabs.Appearance:AddLeftGroupbox("Accessories"), Body = Tabs.Appearance:AddLeftGroupbox("Body Modifications"), Faces = Tabs.Appearance:AddLeftGroupbox("Faces"),
     Cloth = Tabs.Appearance:AddLeftGroupbox("Clothing (Visual)"), Outfit = Tabs.Appearance:AddLeftGroupbox("Outfit Management"), Anim = Tabs.Appearance:AddLeftGroupbox("Animation"),
-    Custom = Tabs.Appearance:AddRightGroupbox("Custom Asset Loader 📦"), Emotes = Tabs.Appearance:AddRightGroupbox("Custom Emotes"), NameTag = Tabs.Appearance:AddRightGroupbox("Custom NameTag"), Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
+    Custom = Tabs.Appearance:AddRightGroupbox("Custom Asset Loader 📦"), Emotes = Tabs.Appearance:AddRightGroupbox("Custom Emotes"), NameTag = Tabs.Appearance:AddRightGroupbox("Universal NameTag 🏷️"), Outfits = Tabs.Appearance:AddLeftGroupbox("Full Outfits"),
     Tools = Tabs.Useful:AddLeftGroupbox("Tools"), TitanEnv = Tabs.Titan:AddLeftGroupbox("Environment 🌍"), TitanVis = Tabs.Titan:AddRightGroupbox("RTX & Visuals 🎨"),
     CH_Gen = Tabs.Crosshair:AddLeftGroupbox("General"), CH_Col = Tabs.Crosshair:AddLeftGroupbox("Color"), CH_Out = Tabs.Crosshair:AddRightGroupbox("Outline"), CH_Anim = Tabs.Crosshair:AddRightGroupbox("Animation"),
     WM_Gen = Tabs.Watermark:AddLeftGroupbox("General"), WM_Pos = Tabs.Watermark:AddLeftGroupbox("Position"), WM_Out = Tabs.Watermark:AddRightGroupbox("Outline")
@@ -629,30 +732,21 @@ G.Emotes:AddDropdown("EmoteSelector", { Values = getKeys(CFG.Emotes), Default = 
 G.Emotes:AddButton("Play Emote ▶️", function() playEmote(Player.Character, getOpt("EmoteSelector", "None")) end)
 G.Emotes:AddButton("Stop Emote ⏹️", stopEmote)
 
--- // Throttled NameTag \ --
+-- // Universal NameTag Controls \ --
 G.NameTag:AddInput("NameTagText", { Default = "[VIP]", Text = "Tag Text" })
 G.NameTag:AddLabel("Tag Color"):AddColorPicker("NameTagColor", { Default = Color3.fromRGB(255, 215, 0) })
-G.NameTag:AddToggle("NameTagEnabled", { Text = "Enable NameTag", Default = false, Callback = function(v)
+G.NameTag:AddToggle("NameTagEnabled", { Text = "Enable Universal NameTag", Default = false, Callback = function(v)
     if State.Conn.Env["NTLoop"] then State.Conn.Env["NTLoop"]:Disconnect() State.Conn.Env["NTLoop"] = nil end
     if v then
         local lastNTUpdate = 0
         State.Conn.Env["NTLoop"] = RunService.RenderStepped:Connect(function()
             if not getTog("NameTagEnabled") or tick() - lastNTUpdate < 0.5 then return end
             lastNTUpdate = tick()
-            local tag, col = getOpt("NameTagText", "[VIP]"), (Options.NameTagColor and Options.NameTagColor.Value) or Color3.fromRGB(255, 215, 0)
-            local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.DisplayName ~= tag .. " " .. Player.Name then hum.DisplayName = tag .. " " .. Player.Name end
-            pcall(function()
-                local s = Player.PlayerGui.MainGui.main.tos.scroll
-                for _, sample in ipairs(s:GetChildren()) do
-                    local nl = sample.Name == "sample" and sample:FindFirstChild("name")
-                    if nl and string.find(nl.Text, Player.Name, 1, true) and not string.find(nl.Text, tag, 1, true) then
-                        nl.Text, nl.TextColor3 = tag .. " " .. nl.Text, col
-                    end
-                end
-            end)
+            updateUniversalNameTag()
         end)
-    elseif Player.Character then local h = Player.Character:FindFirstChildOfClass("Humanoid") if h then h.DisplayName = Player.DisplayName end end
+    else
+        restoreNameTags()
+    end
 end })
 
 -- // Crosshair & Watermark Controls \ --
@@ -840,7 +934,6 @@ G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false
             end
         end)
 
-        -- Classic Fog Setup
         Lighting.FogStart = 0
         playSafeTween(Lighting, {
             FogColor = Color3.fromRGB(155, 160, 165),
@@ -1103,6 +1196,7 @@ local function resetAllUI()
     if Options["EmoteSelector"] then Options["EmoteSelector"]:SetValue("None") end
     for _, obj in ipairs(State.Scripted.CustomAccs) do safeDestroy(obj) end State.Scripted.CustomAccs = {}
     stopEmote()
+    restoreNameTags()
 end
 
 G.Tools:AddButton("Reset All", function() resetAllUI() fullReset(Player.Character) end)
