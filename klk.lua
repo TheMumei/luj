@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.4 - Streamlined RTX & Master Visuals Suite
-    (1-Click Pre-Calibrated RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
+    WhiteRose V8.5 - Turbo Instant Respawn Edition
+    (0ms Instant Respawn Load + 1-Click RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & 1-Click RTX | v8.4", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Turbo Respawn | v8.5", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -121,7 +121,7 @@ local function getEffect(cls, name)
     return e
 end
 
--- // Smart Accessory Manager with Generation Counter \ --
+-- // Smart Accessory Manager with Turbo In-Memory Instant Clone \ --
 local AM = { Conn = {}, SyncToken = 0 }
 local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
 
@@ -239,19 +239,40 @@ function AM:Sync(char, groups)
     if State.Cache.Char == char and State.Cache.Sig == sig then return end
     State.Cache.Char, State.Cache.Sig = char, sig
     self:Clear(char)
+
     for _, id in ipairs(ids) do
-        task.spawn(function()
-            for _ = 1, 10 do
-                if not char or not char.Parent or State.Cache.Sig ~= sig or self.SyncToken ~= curToken then return end
-                local t = State.Cache.AccTmpl[id] or (function() local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. id) local a = ok and o and o[1] if a then State.Cache.AccTmpl[id] = a end return a end)()
-                if t then
-                    local cl = t:Clone() local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
-                    if acc then acc:SetAttribute("WR_Acc", true) if weldAcc(char, acc) then break end elseif attachHair(char, cl) then break end
-                    safeDestroy(cl)
-                end
-                task.wait(0.5)
+        local cached = State.Cache.AccTmpl[id]
+        if cached then
+            local cl = cached:Clone()
+            local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
+            if acc then
+                acc:SetAttribute("WR_Acc", true)
+                if not weldAcc(char, acc) then safeDestroy(cl) end
+            elseif not attachHair(char, cl) then
+                safeDestroy(cl)
             end
-        end)
+        else
+            task.spawn(function()
+                for _ = 1, 6 do
+                    if not char or not char.Parent or State.Cache.Sig ~= sig or self.SyncToken ~= curToken then return end
+                    local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. id)
+                    local a = ok and o and o[1]
+                    if a then
+                        State.Cache.AccTmpl[id] = a
+                        local cl = a:Clone()
+                        local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
+                        if acc then
+                            acc:SetAttribute("WR_Acc", true)
+                            if weldAcc(char, acc) then break end
+                        elseif attachHair(char, cl) then
+                            break
+                        end
+                        safeDestroy(cl)
+                    end
+                    task.wait(0.2)
+                end
+            end)
+        end
     end
 end
 
@@ -312,27 +333,33 @@ function CM:Hide(c, t) if not c or self.Hidden[t] then return end safeDestroy(St
 function CM:Show(c, t) if not self.Hidden[t] then return end self.Hidden[t] = nil restoreClothing(c, t) self:Apply(c, t, getOpt(t .. "Selector", "None")) end
 function CM:Restore(c) if not c then return end for t in pairs(self.Types) do safeDestroy(State.Scripted[t]) State.Scripted[t] = nil restoreClothing(c, t) self.Hidden[t] = nil end end
 
--- // Animation Core \ --
+-- // Turbo Animation Core (Instant ID Swapper) \ --
 local function applyAnim(c, pack)
     pack = pack or "None"
-    task.spawn(function()
-        if not c then return end local anim = c:WaitForChild("Animate", 5) if not anim then return end
-        local is_r6 = isR6(c)
-        if is_r6 and pack ~= "None" then pack = "None" if not State.Cache.R6Warn then State.Cache.R6Warn = true Library:Notify({ Title = "Anims", Content = "R6 rig detected - custom packs disabled.", Duration = 4 }) end end
-        if not next(State.Cache.OrigAnims) then
-            local function g(n, cn) local node = anim:FindFirstChild(n) local t = node and node:FindFirstChild(cn) return t and t.AnimationId or nil end
-            local o = { idle = {g("idle","Animation1"), g("idle","Animation2")}, walk = g("walk","WalkAnim"), run = g("run","RunAnim"), jump = g("jump","JumpAnim"), fall = g("fall","FallAnim"), climb = g("climb","ClimbAnim"), swim = g("swim","Swim"), swimidle = g("swimidle","SwimIdle") }
-            State.Cache.OrigAnims, CFG.Anims["None"] = o, o
-        end
-        local p = {} for k, v in pairs(CFG.Anims[pack] or {}) do p[k] = v end
-        if not is_r6 then for _, ov in pairs(CFG.Ovr) do if getTog(ov.k) then for k, v in pairs(ov.v) do p[k] = v end end end end
-        task.wait(0.1)
-        local orig = State.Cache.OrigAnims
-        local function s(n, cn, v) local node = anim:FindFirstChild(n) local t = node and node:FindFirstChild(cn) if t and v then t.AnimationId = v end end
-        s("idle","Animation1",(p.idle and p.idle[1]) or (orig.idle and orig.idle[1])) s("idle","Animation2",(p.idle and p.idle[2]) or (orig.idle and orig.idle[2]))
-        s("walk","WalkAnim",p.walk or orig.walk) s("run","RunAnim",p.run or orig.run) s("jump","JumpAnim",p.jump or orig.jump) s("fall","FallAnim",p.fall or orig.fall)
-        s("climb","ClimbAnim",p.climb or orig.climb) s("swim","Swim",p.swim or orig.swim) s("swimidle","SwimIdle",p.swimidle or orig.swimidle)
-    end)
+    if not c then return end
+    local anim = c:FindFirstChild("Animate") or c:WaitForChild("Animate", 1.5)
+    if not anim then return end
+
+    local is_r6 = isR6(c)
+    if is_r6 and pack ~= "None" then
+        pack = "None"
+        if not State.Cache.R6Warn then State.Cache.R6Warn = true Library:Notify({ Title = "Anims", Content = "R6 rig detected - custom packs disabled.", Duration = 4 }) end
+    end
+
+    if not next(State.Cache.OrigAnims) then
+        local function g(n, cn) local node = anim:FindFirstChild(n) local t = node and node:FindFirstChild(cn) return t and t.AnimationId or nil end
+        local o = { idle = {g("idle","Animation1"), g("idle","Animation2")}, walk = g("walk","WalkAnim"), run = g("run","RunAnim"), jump = g("jump","JumpAnim"), fall = g("fall","FallAnim"), climb = g("climb","ClimbAnim"), swim = g("swim","Swim"), swimidle = g("swimidle","SwimIdle") }
+        State.Cache.OrigAnims, CFG.Anims["None"] = o, o
+    end
+
+    local p = {} for k, v in pairs(CFG.Anims[pack] or {}) do p[k] = v end
+    if not is_r6 then for _, ov in pairs(CFG.Ovr) do if getTog(ov.k) then for k, v in pairs(ov.v) do p[k] = v end end end end
+
+    local orig = State.Cache.OrigAnims
+    local function s(n, cn, v) local node = anim:FindFirstChild(n) local t = node and node:FindFirstChild(cn) if t and v then t.AnimationId = v end end
+    s("idle","Animation1",(p.idle and p.idle[1]) or (orig.idle and orig.idle[1])) s("idle","Animation2",(p.idle and p.idle[2]) or (orig.idle and orig.idle[2]))
+    s("walk","WalkAnim",p.walk or orig.walk) s("run","RunAnim",p.run or orig.run) s("jump","JumpAnim",p.jump or orig.jump) s("fall","FallAnim",p.fall or orig.fall)
+    s("climb","ClimbAnim",p.climb or orig.climb) s("swim","Swim",p.swim or orig.swim) s("swimidle","SwimIdle",p.swimidle or orig.swimidle)
 end
 
 local function stopEmote()
@@ -1265,25 +1292,44 @@ G.Tools:AddButton("Unload Script", function()
     getgenv().WhiteRoseLoaded = nil Library:Unload()
 end)
 
--- // Character LifeCycle with Debounced AppEnforce \ --
+-- // Turbo Instant Respawn Engine (0ms Fast-Track Lifecycle) \ --
+local function instantSync(c)
+    if not c or not c.Parent then return end
+    pcall(function()
+        stopEmote()
+        AM:Clear(c)
+        captureColors(c, true)
+        syncChar(c)
+        if getTog("NameTagEnabled") then updateUniversalNameTag() end
+    end)
+end
+
 State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     State.CharGen = State.CharGen + 1
     local curGen = State.CharGen
 
+    stopEmote()
+    State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {}, SkyObject = nil }
+    State.Orig.Clothing, State.Orig.LimbColors, State.Orig.LimbData, State.Cache.Applied = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}, {}, {}
+    State.Cache.TrackedLabels = {}
+
     task.spawn(function()
-        c:WaitForChild("Humanoid", 3) c:WaitForChild("Head", 5)
-        local t0 = tick() while tick() - t0 < 2 and not Player:HasAppearanceLoaded() do task.wait(0.1) end
+        local hum = c:WaitForChild("Humanoid", 2)
+        local head = c:WaitForChild("Head", 2)
         if not c.Parent or State.CharGen ~= curGen then return end
 
-        stopEmote()
-        AM:Clear(Player.Character)
-        cleanTableInstances(State.Orig.Clothing)
+        -- Pass 1: Instant In-Memory Injection (0ms)
+        instantSync(c)
 
-        State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {}, SkyObject = nil }
-        State.Orig.Clothing, State.Orig.LimbColors, State.Orig.LimbData, State.Cache.Applied = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}, {}, {}
-        captureColors(c, true) pcall(syncChar, c)
-        if getTog("NameTagEnabled") then updateUniversalNameTag() end
+        -- Pass 2: Fast-Track Animation Sync
+        task.spawn(function()
+            local anim = c:FindFirstChild("Animate") or c:WaitForChild("Animate", 1.5)
+            if anim and c.Parent and State.CharGen == curGen then
+                applyAnim(c, getOpt("AnimationPackSelector", "None"))
+            end
+        end)
 
+        -- Pass 3: Background Descendant Added Enforcer
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
         local enforcePending = false
         State.Conn.Env["AppEnforce"] = c.DescendantAdded:Connect(function(d)
@@ -1293,7 +1339,7 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
                     enforcePending = true
                     task.defer(function()
                         enforcePending = false
-                        if c and c.Parent then syncChar(c) end
+                        if c and c.Parent and State.CharGen == curGen then syncChar(c) end
                     end)
                 end
             end
