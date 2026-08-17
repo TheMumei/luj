@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.1 - Optimized Master Performance Suite
-    (Zero-Lag Architecture + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
+    WhiteRose V8.2 - Pink Sky & Master Visuals Suite
+    (Enforce Pink Sky + Universal Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Optimized | v8.1", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Pink Sky | v8.2", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -936,7 +936,6 @@ G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false
         emitter.Shape = Enum.ParticleEmitterShape.Box
         emitter.Parent = rainPart
 
-        -- Position Thresholding Optimization
         local lastPos = Vector3.zero
         RunService:BindToRenderStep("ExecutorRainLoop", Enum.RenderPriority.Camera.Value + 1, function()
             local currentCam = Workspace.CurrentCamera
@@ -1057,8 +1056,55 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     end)
 end)
 
--- // Universal Sky Enforcement with Dirty-Checking Optimization \ --
-G.TitanEnv:AddButton("Enforce Universal Sky", function()
+-- // Universal Sky & Studio Pink Sky Engines \ --
+G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
+    local pinkSkyBox = {
+        SkyboxBk = "rbxassetid://271042516",
+        SkyboxDn = "rbxassetid://271077243",
+        SkyboxFt = "rbxassetid://271042556",
+        SkyboxLf = "rbxassetid://271042310",
+        SkyboxRt = "rbxassetid://271042467",
+        SkyboxUp = "rbxassetid://271077958",
+        StarCount = 1334,
+        SunAngularSize = 21,
+        MoonAngularSize = 11
+    }
+    local targetAmbient = Color3.fromRGB(180, 140, 160)
+    local targetOutdoor = Color3.fromRGB(210, 165, 185)
+
+    local function enforcePinkSky()
+        if not State.Scripted.SkyObject or not State.Scripted.SkyObject.Parent then
+            State.Scripted.SkyObject = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
+        end
+        local sky = State.Scripted.SkyObject
+        for p, v in pairs(pinkSkyBox) do
+            if sky[p] ~= v then sky[p] = v end
+        end
+        if Lighting.ClockTime ~= 17.2 then Lighting.ClockTime = 17.2 end
+        if Lighting.Brightness ~= 2.2 then Lighting.Brightness = 2.2 end
+        if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
+        if Lighting.OutdoorAmbient ~= targetOutdoor then Lighting.OutdoorAmbient = targetOutdoor end
+    end
+
+    for _, d in ipairs(Lighting:GetChildren()) do
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+    end
+    enforcePinkSky()
+
+    if State.Conn.Env["Sky1"] then State.Conn.Env["Sky1"]:Disconnect() end
+    if State.Conn.Env["Sky2"] then State.Conn.Env["Sky2"]:Disconnect() end
+
+    State.Conn.Env["Sky1"] = Lighting.ChildAdded:Connect(function(d)
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then
+            task.defer(function() safeDestroy(d) end)
+        end
+    end)
+    State.Conn.Env["Sky2"] = RunService.RenderStepped:Connect(enforcePinkSky)
+
+    Library:Notify({ Title = "System", Content = "Pink Sky enforced continuously!", Duration = 3 })
+end)
+
+G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
     local skyBox = { SkyboxBk = "rbxassetid://12216109205", SkyboxDn = "rbxassetid://12216109875", SkyboxFt = "rbxassetid://12216109489", SkyboxLf = "rbxassetid://12216110170", SkyboxRt = "rbxassetid://12216110471", SkyboxUp = "rbxassetid://12216108877" }
     local targetAmbient = Color3.fromRGB(135, 140, 150)
 
@@ -1263,7 +1309,6 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
         captureColors(c, true) pcall(syncChar, c)
         if getTog("NameTagEnabled") then updateUniversalNameTag() end
 
-        -- Debounced Appearance Enforcement
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
         local enforcePending = false
         State.Conn.Env["AppEnforce"] = c.DescendantAdded:Connect(function(d)
