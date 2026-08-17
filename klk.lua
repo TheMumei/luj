@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.6 - Seamless Horizon & Master Visuals Suite
-    (Fixed Orange Void/Horizon Seam + Turbo Respawn + 1-Click RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox)
+    WhiteRose V8.7 - Fog Synchronized RTX Edition
+    (Fixed RTX Fog Clearing + Seamless Horizon + Turbo Respawn + Pink Sky + Universal NameTag + Dual R6/R15 Korblox)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Seamless Horizon | v8.6", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Fog RTX | v8.7", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -1112,7 +1112,6 @@ G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
         if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
         if Lighting.OutdoorAmbient ~= targetOutdoor then Lighting.OutdoorAmbient = targetOutdoor end
 
-        -- Neutralize orange scattering in atmosphere
         local atm = Lighting:FindFirstChild("MyRTX_Atmosphere") or Lighting:FindFirstChildOfClass("Atmosphere")
         if atm and atm.Density > 0 then
             atm.Density = 0
@@ -1152,7 +1151,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
         if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
         if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
         if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
-        if Lighting.OutdoorAmbient ~= targetAmbient then Lighting.OutdoorAmbient = targetAmbient end
+        if Lighting.OutdoorAmbient ~= targetOutdoor then Lighting.OutdoorAmbient = targetOutdoor end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
@@ -1173,15 +1172,17 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
     Library:Notify({ Title = "System", Content = "Universal Sky enforced continuously!", Duration = 3 })
 end)
 
--- // Pre-Calibrated 1-Click RTX Presets Engine \ --
+-- // Fog-Synchronized 1-Click RTX Presets Engine \ --
 local function applyRTXPreset(mode)
-    local atm = getEffect("Atmosphere", "MyRTX_Atmosphere")
     local blm = getEffect("BloomEffect", "MyRTX_Bloom")
     local col = getEffect("ColorCorrectionEffect", "MyRTX_Color")
     local blr = getEffect("BlurEffect", "MyRTX_Blur")
 
     local oldSun = Lighting:FindFirstChild("MyRTX_SunRays") or Lighting:FindFirstChildOfClass("SunRaysEffect")
     if oldSun then safeDestroy(oldSun) end
+
+    local oldAtm = Lighting:FindFirstChild("MyRTX_Atmosphere")
+    if oldAtm then safeDestroy(oldAtm) end
 
     Lighting.GlobalShadows = true
     Lighting.ShadowSoftness = 0.2
@@ -1190,6 +1191,7 @@ local function applyRTXPreset(mode)
     pcall(function() Lighting.Technology = Enum.Technology.Future end)
 
     local isRain = getTog("RainToggle")
+    local rainIntensity = getOpt("RainIntensitySlider", 50)
 
     if mode == "Day" then
         local lightingProps = {
@@ -1197,14 +1199,17 @@ local function applyRTXPreset(mode)
             Ambient = Color3.fromRGB(45, 45, 52), OutdoorAmbient = Color3.fromRGB(85, 90, 100),
             ExposureCompensation = 0.05
         }
-        if not isRain then
-            lightingProps.FogColor = Color3.fromRGB(215, 225, 240)
-            lightingProps.FogStart = 500
-            lightingProps.FogEnd = 2500
-            playSafeTween(atm, { Density = 0, Offset = 0.25, Haze = 0, Glare = 0, Color = Color3.fromRGB(195, 210, 235), Decay = Color3.fromRGB(105, 115, 135) })
+
+        if isRain then
+            lightingProps.FogStart = 0
+            lightingProps.FogEnd = 700 - (rainIntensity * 4)
+            lightingProps.FogColor = Color3.fromRGB(155, 160, 165)
         else
-            playSafeTween(atm, { Density = 0, Haze = 0, Glare = 0 })
+            lightingProps.FogStart = 150
+            lightingProps.FogEnd = 1200
+            lightingProps.FogColor = Color3.fromRGB(220, 210, 225)
         end
+
         playSafeTween(Lighting, lightingProps)
         playSafeTween(blm, { Intensity = 0.35, Size = 14, Threshold = 0.9 })
         playSafeTween(col, { Brightness = 0.02, Contrast = 0.16, Saturation = 0.2, TintColor = Color3.fromRGB(255, 252, 248) })
@@ -1215,14 +1220,17 @@ local function applyRTXPreset(mode)
             Ambient = Color3.fromRGB(18, 20, 28), OutdoorAmbient = Color3.fromRGB(25, 30, 45),
             ExposureCompensation = 0
         }
-        if not isRain then
-            lightingProps.FogColor = Color3.fromRGB(15, 18, 30)
-            lightingProps.FogStart = 100
-            lightingProps.FogEnd = 1200
-            playSafeTween(atm, { Density = 0, Offset = 0.1, Haze = 0, Glare = 0, Color = Color3.fromRGB(20, 25, 45), Decay = Color3.fromRGB(10, 15, 30) })
+
+        if isRain then
+            lightingProps.FogStart = 0
+            lightingProps.FogEnd = 650 - (rainIntensity * 4)
+            lightingProps.FogColor = Color3.fromRGB(30, 35, 45)
         else
-            playSafeTween(atm, { Density = 0, Haze = 0, Glare = 0 })
+            lightingProps.FogStart = 50
+            lightingProps.FogEnd = 800
+            lightingProps.FogColor = Color3.fromRGB(15, 18, 30)
         end
+
         playSafeTween(Lighting, lightingProps)
         playSafeTween(blm, { Intensity = 0.8, Size = 20, Threshold = 0.75 })
         playSafeTween(col, { Brightness = 0, Contrast = 0.22, Saturation = 0.25, TintColor = Color3.fromRGB(210, 230, 255) })
