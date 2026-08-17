@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.3 - Clean Lighting & Master Visuals Suite
-    (SunRays Removed + Pink Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
+    WhiteRose V8.4 - Streamlined RTX & Master Visuals Suite
+    (1-Click Pre-Calibrated RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Clean RTX | v8.3", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & 1-Click RTX | v8.4", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -1138,14 +1138,13 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
     Library:Notify({ Title = "System", Content = "Universal Sky enforced continuously!", Duration = 3 })
 end)
 
--- // Clean RTX Engine (Without SunRaysEffect & Blinding Glare) \ --
+-- // Pre-Calibrated 1-Click RTX Presets Engine \ --
 local function applyRTXPreset(mode)
     local atm = getEffect("Atmosphere", "MyRTX_Atmosphere")
     local blm = getEffect("BloomEffect", "MyRTX_Bloom")
     local col = getEffect("ColorCorrectionEffect", "MyRTX_Color")
     local blr = getEffect("BlurEffect", "MyRTX_Blur")
 
-    -- Clean up any active SunRays
     local oldSun = Lighting:FindFirstChild("MyRTX_SunRays") or Lighting:FindFirstChildOfClass("SunRaysEffect")
     if oldSun then safeDestroy(oldSun) end
 
@@ -1172,8 +1171,8 @@ local function applyRTXPreset(mode)
             playSafeTween(atm, { Density = 0, Haze = 0 })
         end
         playSafeTween(Lighting, lightingProps)
-        playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 0.4), Size = 16, Threshold = 0.88 })
-        playSafeTween(col, { Brightness = 0.02, Contrast = getOpt("RTXContrastSlider", 0.15), Saturation = getOpt("RTXSaturationSlider", 0.18), TintColor = Color3.fromRGB(255, 252, 248) })
+        playSafeTween(blm, { Intensity = 0.35, Size = 14, Threshold = 0.9 })
+        playSafeTween(col, { Brightness = 0.02, Contrast = 0.16, Saturation = 0.2, TintColor = Color3.fromRGB(255, 252, 248) })
 
     elseif mode == "Night" then
         local lightingProps = {
@@ -1190,39 +1189,14 @@ local function applyRTXPreset(mode)
             playSafeTween(atm, { Density = 0, Haze = 0 })
         end
         playSafeTween(Lighting, lightingProps)
-        playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 1.0), Size = 24, Threshold = 0.72 })
-        playSafeTween(col, { Brightness = 0, Contrast = getOpt("RTXContrastSlider", 0.22), Saturation = getOpt("RTXSaturationSlider", 0.22), TintColor = Color3.fromRGB(210, 230, 255) })
+        playSafeTween(blm, { Intensity = 0.8, Size = 20, Threshold = 0.75 })
+        playSafeTween(col, { Brightness = 0, Contrast = 0.22, Saturation = 0.25, TintColor = Color3.fromRGB(210, 230, 255) })
     end
     playSafeTween(blr, { Size = 0 })
 end
 
 G.TitanVis:AddButton("Activate RTX Ultra Day ☀️", function() applyRTXPreset("Day") Library:Notify({ Title = "RTX Engine", Content = "RTX Ultra Day Mode Applied!", Duration = 3 }) end)
 G.TitanVis:AddButton("Activate RTX Cyberpunk Night 🌙", function() applyRTXPreset("Night") Library:Notify({ Title = "RTX Engine", Content = "RTX Cyberpunk Night Applied!", Duration = 3 }) end)
-
-G.TitanVis:AddSlider("RTXBloomSlider", {
-    Text = "Bloom Glow Intensity", Default = 0.4, Min = 0, Max = 2, Rounding = 2,
-    Callback = function(v)
-        local blm = Lighting:FindFirstChild("MyRTX_Bloom")
-        if blm and blm:IsA("BloomEffect") then playSafeTween(blm, { Intensity = v }) end
-    end
-})
-
-G.TitanVis:AddSlider("RTXSaturationSlider", {
-    Text = "Color Vibrance / Saturation", Default = 0.2, Min = -0.5, Max = 1, Rounding = 2,
-    Callback = function(v)
-        local col = Lighting:FindFirstChild("MyRTX_Color")
-        if col and col:IsA("ColorCorrectionEffect") then playSafeTween(col, { Saturation = v }) end
-    end
-})
-
-G.TitanVis:AddSlider("RTXContrastSlider", {
-    Text = "Dynamic Range Contrast", Default = 0.18, Min = -0.2, Max = 0.6, Rounding = 2,
-    Callback = function(v)
-        local col = Lighting:FindFirstChild("MyRTX_Color")
-        if col and col:IsA("ColorCorrectionEffect") then playSafeTween(col, { Contrast = v }) end
-    end
-})
-
 G.TitanVis:AddButton("Reset Lighting to Default 🔄", function()
     for _, d in ipairs(Lighting:GetChildren()) do
         if string.match(d.Name, "^MyRTX_") or d:IsA("SunRaysEffect") then safeDestroy(d) end
