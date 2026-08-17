@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.0 - Master Universal NameTag & Visuals Suite
-    (RichText Live Leaderboard Tag + Overhead Sync + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
+    WhiteRose V8.1 - Optimized Master Performance Suite
+    (Zero-Lag Architecture + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Live NameTag | v8.0", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Optimized | v8.1", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -59,7 +59,7 @@ local allActions = {}
 local State = {
     Orig = { LimbColors = {}, Sound = {}, Lighting = {}, Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, LimbData = {} },
     Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil, CustomAccs = {}, SkyObject = nil },
-    Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {} },
+    Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {}, TrackedLabels = {} },
     CharGen = 0
 }
 
@@ -121,8 +121,8 @@ local function getEffect(cls, name)
     return e
 end
 
--- // Smart Accessory Manager \ --
-local AM = { Conn = {} }
+-- // Smart Accessory Manager with Generation Counter \ --
+local AM = { Conn = {}, SyncToken = 0 }
 local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
 
 local function makeCosmetic(r) for _, d in ipairs(r:GetDescendants()) do if d:IsA("BasePart") then d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.Massless = false, false, false, false, true end end end
@@ -232,6 +232,8 @@ function AM:Clear(char)
 end
 
 function AM:Sync(char, groups)
+    self.SyncToken = self.SyncToken + 1
+    local curToken = self.SyncToken
     local ids = {} for _, g in pairs(groups) do for _, id in ipairs(g) do table.insert(ids, tostring(id)) end end table.sort(ids)
     local sig = table.concat(ids, ",")
     if State.Cache.Char == char and State.Cache.Sig == sig then return end
@@ -240,7 +242,7 @@ function AM:Sync(char, groups)
     for _, id in ipairs(ids) do
         task.spawn(function()
             for _ = 1, 10 do
-                if not char or not char.Parent or State.Cache.Sig ~= sig then return end
+                if not char or not char.Parent or State.Cache.Sig ~= sig or self.SyncToken ~= curToken then return end
                 local t = State.Cache.AccTmpl[id] or (function() local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. id) local a = ok and o and o[1] if a then State.Cache.AccTmpl[id] = a end return a end)()
                 if t then
                     local cl = t:Clone() local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
@@ -364,7 +366,7 @@ local function syncChar(c)
     applyAnim(c, getOpt("AnimationPackSelector", "None"))
 end
 
--- // High-Performance Live NameTag Engine with RichText Support \ --
+-- // High-Performance Cached Universal NameTag Engine \ --
 local function formatTagText(tag, rawName, col)
     if not tag or tag == "" then return rawName end
     local hex = string.format("#%02X%02X%02X", math.floor(col.R * 255), math.floor(col.G * 255), math.floor(col.B * 255))
@@ -372,39 +374,24 @@ local function formatTagText(tag, rawName, col)
 end
 
 local function restoreNameTags()
-    local pName, pDisplay = Player.Name, Player.DisplayName
+    local pDisplay = Player.DisplayName
     if Player.Character then
         local h = Player.Character:FindFirstChildOfClass("Humanoid")
         if h then h.DisplayName = pDisplay end
-        for _, d in ipairs(Player.Character:GetDescendants()) do
-            if d:IsA("TextLabel") and d:GetAttribute("WR_OrigText") then
-                d.Text = d:GetAttribute("WR_OrigText")
-                if d:GetAttribute("WR_OrigCol") then d.TextColor3 = d:GetAttribute("WR_OrigCol") end
-                d:SetAttribute("WR_OrigText", nil)
-                d:SetAttribute("WR_OrigCol", nil)
+    end
+    for lbl in pairs(State.Cache.TrackedLabels) do
+        if lbl and lbl.Parent then
+            local orig = lbl:GetAttribute("WR_OrigText")
+            if orig then
+                lbl.Text = orig
+                local oCol = lbl:GetAttribute("WR_OrigCol")
+                if oCol then lbl.TextColor3 = oCol end
+                lbl:SetAttribute("WR_OrigText", nil)
+                lbl:SetAttribute("WR_OrigCol", nil)
             end
         end
     end
-    pcall(function()
-        for _, d in ipairs(game:GetService("CoreGui"):GetDescendants()) do
-            if d:IsA("TextLabel") and d:GetAttribute("WR_OrigText") then
-                d.Text = d:GetAttribute("WR_OrigText")
-                if d:GetAttribute("WR_OrigCol") then d.TextColor3 = d:GetAttribute("WR_OrigCol") end
-                d:SetAttribute("WR_OrigText", nil)
-                d:SetAttribute("WR_OrigCol", nil)
-            end
-        end
-    end)
-    pcall(function()
-        for _, d in ipairs(Player.PlayerGui:GetDescendants()) do
-            if d:IsA("TextLabel") and d:GetAttribute("WR_OrigText") then
-                d.Text = d:GetAttribute("WR_OrigText")
-                if d:GetAttribute("WR_OrigCol") then d.TextColor3 = d:GetAttribute("WR_OrigCol") end
-                d:SetAttribute("WR_OrigText", nil)
-                d:SetAttribute("WR_OrigCol", nil)
-            end
-        end
-    end)
+    State.Cache.TrackedLabels = {}
 end
 
 local function applyToLabel(lbl, baseName, tag, col)
@@ -415,6 +402,7 @@ local function applyToLabel(lbl, baseName, tag, col)
     end
     lbl.RichText = true
     lbl.Text = formatTagText(tag, baseName, col)
+    State.Cache.TrackedLabels[lbl] = true
 end
 
 local function updateUniversalNameTag()
@@ -428,18 +416,15 @@ local function updateUniversalNameTag()
     -- 1. Humanoid DisplayName
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.DisplayName ~= plainFormatted then
-            hum.DisplayName = plainFormatted
-        end
+        if hum and hum.DisplayName ~= plainFormatted then hum.DisplayName = plainFormatted end
 
         -- 2. Overhead BillboardGuis
-        for _, d in ipairs(char:GetDescendants()) do
+        for _, d in ipairs(char:GetChildren()) do
             if d:IsA("BillboardGui") then
                 for _, lbl in ipairs(d:GetDescendants()) do
                     if lbl:IsA("TextLabel") then
                         local orig = lbl:GetAttribute("WR_OrigText")
-                        if orig then
-                            applyToLabel(lbl, orig, tag, col)
+                        if orig then applyToLabel(lbl, orig, tag, col)
                         elseif lbl.Text == pName or lbl.Text == pDisplay or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
                             applyToLabel(lbl, pDisplay, tag, col)
                         end
@@ -449,17 +434,24 @@ local function updateUniversalNameTag()
         end
     end
 
-    -- 3. CoreGui PlayerList (Official Leaderboard)
+    -- 3. Update Existing Cached Labels Fast
+    for lbl in pairs(State.Cache.TrackedLabels) do
+        if lbl and lbl.Parent then
+            local orig = lbl:GetAttribute("WR_OrigText")
+            if orig then applyToLabel(lbl, orig, tag, col) end
+        else
+            State.Cache.TrackedLabels[lbl] = nil
+        end
+    end
+
+    -- 4. Target Scan (CoreGui PlayerList & Custom Leaderboard Guis)
     pcall(function()
         local coreGui = game:GetService("CoreGui")
         local pList = coreGui:FindFirstChild("PlayerList") or coreGui:FindFirstChild("PlayerListMaster")
         if pList then
             for _, lbl in ipairs(pList:GetDescendants()) do
-                if lbl:IsA("TextLabel") then
-                    local orig = lbl:GetAttribute("WR_OrigText")
-                    if orig then
-                        applyToLabel(lbl, orig, tag, col)
-                    elseif lbl.Text == pName or lbl.Text == pDisplay or lbl.Text == "@" .. pName or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
+                if lbl:IsA("TextLabel") and not State.Cache.TrackedLabels[lbl] then
+                    if lbl.Text == pName or lbl.Text == pDisplay or lbl.Text == "@" .. pName or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
                         applyToLabel(lbl, pDisplay, tag, col)
                     end
                 end
@@ -467,17 +459,16 @@ local function updateUniversalNameTag()
         end
     end)
 
-    -- 4. Custom Game In-Game Leaderboards (PlayerGui)
     pcall(function()
         for _, gui in ipairs(Player.PlayerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name ~= "Obsidian" and gui.Name ~= "WhiteRose" then
-                for _, lbl in ipairs(gui:GetDescendants()) do
-                    if lbl:IsA("TextLabel") then
-                        local orig = lbl:GetAttribute("WR_OrigText")
-                        if orig then
-                            applyToLabel(lbl, orig, tag, col)
-                        elseif lbl.Text == pName or lbl.Text == pDisplay or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
-                            applyToLabel(lbl, pDisplay, tag, col)
+                local gName = string.lower(gui.Name)
+                if string.find(gName, "leader") or string.find(gName, "player") or string.find(gName, "tab") or string.find(gName, "board") or string.find(gName, "list") or string.find(gName, "main") then
+                    for _, lbl in ipairs(gui:GetDescendants()) do
+                        if lbl:IsA("TextLabel") and not State.Cache.TrackedLabels[lbl] then
+                            if lbl.Text == pName or lbl.Text == pDisplay or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
+                                applyToLabel(lbl, pDisplay, tag, col)
+                            end
                         end
                     end
                 end
@@ -892,7 +883,7 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
     end
 end)
 
--- // Titan Engine Tools (Classic Rain & Fog Engine) \ --
+-- // Titan Engine Tools (Optimized Rain & Classic Fog Engine) \ --
 G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false, Callback = function(enabled)
     pcall(function() RunService:UnbindFromRenderStep("ExecutorRainLoop") end)
     local oldPart = Workspace:FindFirstChild("MyExecutorRainPart")
@@ -945,11 +936,16 @@ G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false
         emitter.Shape = Enum.ParticleEmitterShape.Box
         emitter.Parent = rainPart
 
+        -- Position Thresholding Optimization
+        local lastPos = Vector3.zero
         RunService:BindToRenderStep("ExecutorRainLoop", Enum.RenderPriority.Camera.Value + 1, function()
             local currentCam = Workspace.CurrentCamera
             if currentCam and rainPart and rainPart.Parent then
                 local camPos = currentCam.CFrame.Position
-                rainPart.Position = Vector3.new(camPos.X, camPos.Y + 70, camPos.Z)
+                if (camPos - lastPos).Magnitude > 3 then
+                    lastPos = camPos
+                    rainPart.CFrame = CFrame.new(camPos.X, camPos.Y + 70, camPos.Z)
+                end
             end
         end)
 
@@ -1061,9 +1057,10 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     end)
 end)
 
--- // Continuous Universal Sky Enforcement \ --
+-- // Universal Sky Enforcement with Dirty-Checking Optimization \ --
 G.TitanEnv:AddButton("Enforce Universal Sky", function()
     local skyBox = { SkyboxBk = "rbxassetid://12216109205", SkyboxDn = "rbxassetid://12216109875", SkyboxFt = "rbxassetid://12216109489", SkyboxLf = "rbxassetid://12216110170", SkyboxRt = "rbxassetid://12216110471", SkyboxUp = "rbxassetid://12216108877" }
+    local targetAmbient = Color3.fromRGB(135, 140, 150)
 
     local function enforceSky()
         if not State.Scripted.SkyObject or not State.Scripted.SkyObject.Parent then
@@ -1073,8 +1070,8 @@ G.TitanEnv:AddButton("Enforce Universal Sky", function()
         for p, v in pairs(skyBox) do if sky[p] ~= v then sky[p] = v end end
         if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
         if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
-        Lighting.Ambient = Color3.fromRGB(135, 140, 150)
-        Lighting.OutdoorAmbient = Color3.fromRGB(135, 140, 150)
+        if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
+        if Lighting.OutdoorAmbient ~= targetAmbient then Lighting.OutdoorAmbient = targetAmbient end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
@@ -1247,7 +1244,7 @@ G.Tools:AddButton("Unload Script", function()
     getgenv().WhiteRoseLoaded = nil Library:Unload()
 end)
 
--- // Character LifeCycle \ --
+-- // Character LifeCycle with Debounced AppEnforce \ --
 State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     State.CharGen = State.CharGen + 1
     local curGen = State.CharGen
@@ -1266,10 +1263,20 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
         captureColors(c, true) pcall(syncChar, c)
         if getTog("NameTagEnabled") then updateUniversalNameTag() end
 
+        -- Debounced Appearance Enforcement
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
+        local enforcePending = false
         State.Conn.Env["AppEnforce"] = c.DescendantAdded:Connect(function(d)
             if not d.Parent or d:GetAttribute("WR_Refreshing") or d:IsA("Tool") or d:FindFirstAncestorWhichIsA("Tool") or isScriptedItem(d) then return end
-            task.wait() if d.Parent and (d:IsA("Clothing") or d:IsA("ShirtGraphic") or d:IsA("Accessory") or d:IsA("BodyColors") or d:IsA("Decal") or d:IsA("SpecialMesh")) then syncChar(c) end
+            if d:IsA("Clothing") or d:IsA("ShirtGraphic") or d:IsA("Accessory") or d:IsA("BodyColors") or d:IsA("Decal") or d:IsA("SpecialMesh") then
+                if not enforcePending then
+                    enforcePending = true
+                    task.defer(function()
+                        enforcePending = false
+                        if c and c.Parent then syncChar(c) end
+                    end)
+                end
+            end
         end)
     end)
 end)
