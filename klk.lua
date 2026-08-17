@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.7 - Fog Synchronized RTX Edition
-    (Fixed RTX Fog Clearing + Seamless Horizon + Turbo Respawn + Pink Sky + Universal NameTag + Dual R6/R15 Korblox)
+    WhiteRose V8.8 - Ultra-Engine Optimized Edition
+    (Weak-Table Memory Safety + Fast-Math Crosshair + Throttled Sky + MeshPart Headless + Debris Filter)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -12,6 +12,11 @@ local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 
+-- // Fast Lua Math & String Upvalues \ --
+local math_sin, math_cos, math_rad, math_round, math_min, math_max = math.sin, math.cos, math.rad, math.round, math.min, math.max
+local string_find, string_format, string_sub, string_match, string_lower = string.find, string.format, string.sub, string.match, string.lower
+local table_insert, table_remove = table.insert, table.remove
+
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local function fetch(p) local ok, m = pcall(function() return loadstring(game:HttpGet(repo .. p))() end) return ok and m or nil end
 local Library = fetch("Library.lua")
@@ -21,7 +26,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Fog RTX | v8.7", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Ultra Engine | v8.8", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -54,16 +59,24 @@ local MC_MATERIALS = {
     [Enum.Material.Snow] = { "11108916253" }, [Enum.Material.Wood] = { "11546477504" }, [Enum.Material.WoodPlanks] = { "11546480686" }
 }
 
--- // State & Memory Management \ --
+-- // State & Memory Management (With Weak Reference Tables) \ --
 local allActions = {}
 local State = {
     Orig = { LimbColors = {}, Sound = {}, Lighting = {}, Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, LimbData = {} },
     Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil, CustomAccs = {}, SkyObject = nil },
-    Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {}, TrackedLabels = {} },
+    Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {}, TrackedLabels = setmetatable({}, { __mode = "k" }) },
     CharGen = 0
 }
 
-local function getKeys(t) local k = {} for i in pairs(t) do table.insert(k, i) end table.sort(k) return k end
+-- // Dynamic Inset Caching for Crosshair \ --
+local cachedGuiInset = GuiService:GetGuiInset()
+local function refreshGuiInset() cachedGuiInset = GuiService:GetGuiInset() end
+if Workspace.CurrentCamera then Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshGuiInset) end
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if Workspace.CurrentCamera then Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshGuiInset) end
+end)
+
+local function getKeys(t) local k = {} for i in pairs(t) do table_insert(k, i) end table.sort(k) return k end
 local function getOpt(n, d) return (Options[n] and Options[n].Value ~= nil) and Options[n].Value or d end
 local function getTog(n) return Toggles[n] and Toggles[n].Value or false end
 
@@ -121,7 +134,7 @@ local function getEffect(cls, name)
     return e
 end
 
--- // Smart Accessory Manager with Turbo In-Memory Instant Clone \ --
+-- // Smart Accessory Manager \ --
 local AM = { Conn = {}, SyncToken = 0 }
 local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
 
@@ -134,8 +147,8 @@ local function computeAutoHairOffset(head, parts, baseCFrame)
         local rel, half = inv * part.CFrame, part.Size / 2
         for _, sx in ipairs({ -1, 1 }) do for _, sy in ipairs({ -1, 1 }) do for _, sz in ipairs({ -1, 1 }) do
             local corner = rel:PointToWorldSpace(Vector3.new(half.X * sx, half.Y * sy, half.Z * sz))
-            min = Vector3.new(math.min(min.X, corner.X), math.min(min.Y, corner.Y), math.min(min.Z, corner.Z))
-            max = Vector3.new(math.max(max.X, corner.X), math.max(max.Y, corner.Y), math.max(max.Z, corner.Z))
+            min = Vector3.new(math_min(min.X, corner.X), math_min(min.Y, corner.Y), math_min(min.Z, corner.Z))
+            max = Vector3.new(math_max(max.X, corner.X), math_max(max.Y, corner.Y), math_max(max.Z, corner.Z))
         end end end
     end
     return CFrame.new(-(min.X + max.X) / 2, (head.Size.Y / 2 + 0.1) - max.Y, -(min.Z + max.Z) / 2)
@@ -163,15 +176,15 @@ function AM:Bind(tp, c)
         if c:IsA("BasePart") then c.Transparency, c.LocalTransparencyModifier = trans, ltm end
     end
 
-    table.insert(self.Conn, tp:GetPropertyChangedSignal("Transparency"):Connect(sync))
-    table.insert(self.Conn, tp:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
+    table_insert(self.Conn, tp:GetPropertyChangedSignal("Transparency"):Connect(sync))
+    table_insert(self.Conn, tp:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
 
     if tp.Name == "Head" and tp.Parent then
         local char = tp.Parent
         local bodyPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
         if bodyPart then
-            table.insert(self.Conn, bodyPart:GetPropertyChangedSignal("Transparency"):Connect(sync))
-            table.insert(self.Conn, bodyPart:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
+            table_insert(self.Conn, bodyPart:GetPropertyChangedSignal("Transparency"):Connect(sync))
+            table_insert(self.Conn, bodyPart:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
         end
     end
 
@@ -200,7 +213,7 @@ end
 local function attachHair(char, root)
     local head = char:FindFirstChild("Head") if not head then return false end
     local parts = root:IsA("BasePart") and { root } or {}
-    if #parts == 0 then for _, d in ipairs(root:GetDescendants()) do if d:IsA("BasePart") then table.insert(parts, d) end end end
+    if #parts == 0 then for _, d in ipairs(root:GetDescendants()) do if d:IsA("BasePart") then table_insert(parts, d) end end end
     if #parts == 0 then return false end
     local base, bCF = parts[1], parts[1].CFrame
     local attP, att
@@ -234,7 +247,7 @@ end
 function AM:Sync(char, groups)
     self.SyncToken = self.SyncToken + 1
     local curToken = self.SyncToken
-    local ids = {} for _, g in pairs(groups) do for _, id in ipairs(g) do table.insert(ids, tostring(id)) end end table.sort(ids)
+    local ids = {} for _, g in pairs(groups) do for _, id in ipairs(g) do table_insert(ids, tostring(id)) end end table.sort(ids)
     local sig = table.concat(ids, ",")
     if State.Cache.Char == char and State.Cache.Sig == sig then return end
     State.Cache.Char, State.Cache.Sig = char, sig
@@ -311,7 +324,7 @@ local function storeClothing(char, typeStr, cls)
     local orig = State.Orig.Clothing
     if typeStr == "TShirt" then
         if #orig.TShirts > 0 then return end
-        for _, it in ipairs(char:GetChildren()) do if it:IsA(cls) and it ~= State.Scripted.TShirt and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then table.insert(orig.TShirts, it) end end
+        for _, it in ipairs(char:GetChildren()) do if it:IsA(cls) and it ~= State.Scripted.TShirt and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then table_insert(orig.TShirts, it) end end
     elseif not orig[typeStr] then
         local it = char:FindFirstChildOfClass(cls) if it and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then orig[typeStr] = it end
     end
@@ -333,7 +346,7 @@ function CM:Hide(c, t) if not c or self.Hidden[t] then return end safeDestroy(St
 function CM:Show(c, t) if not self.Hidden[t] then return end self.Hidden[t] = nil restoreClothing(c, t) self:Apply(c, t, getOpt(t .. "Selector", "None")) end
 function CM:Restore(c) if not c then return end for t in pairs(self.Types) do safeDestroy(State.Scripted[t]) State.Scripted[t] = nil restoreClothing(c, t) self.Hidden[t] = nil end end
 
--- // Turbo Animation Core (Instant ID Swapper) \ --
+-- // Turbo Animation Core \ --
 local function applyAnim(c, pack)
     pack = pack or "None"
     if not c then return end
@@ -384,7 +397,7 @@ local function syncChar(c)
     for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do CM:Apply(c, t, getOpt(t .. "Selector", "None")) end
     for name, act in pairs(allActions) do
         if getTog(name) then
-            if act.type == "Accessory" then for _, ids in pairs(act.action) do for _, id in ipairs(ids) do table.insert(active.Auto, id) end end
+            if act.type == "Accessory" then for _, ids in pairs(act.action) do for _, id in ipairs(ids) do table_insert(active.Auto, id) end end
             elseif not State.Cache.Applied[name] then pcall(act.action, c, true) State.Cache.Applied[name] = true end
         end
     end
@@ -396,8 +409,8 @@ end
 -- // High-Performance Cached Universal NameTag Engine \ --
 local function formatTagText(tag, rawName, col)
     if not tag or tag == "" then return rawName end
-    local hex = string.format("#%02X%02X%02X", math.floor(col.R * 255), math.floor(col.G * 255), math.floor(col.B * 255))
-    return string.format('<font color="%s">%s</font> %s', hex, tag, rawName)
+    local hex = string_format("#%02X%02X%02X", math.floor(col.R * 255), math.floor(col.G * 255), math.floor(col.B * 255))
+    return string_format('<font color="%s">%s</font> %s', hex, tag, rawName)
 end
 
 local function restoreNameTags()
@@ -418,7 +431,7 @@ local function restoreNameTags()
             end
         end
     end
-    State.Cache.TrackedLabels = {}
+    State.Cache.TrackedLabels = setmetatable({}, { __mode = "k" })
 end
 
 local function applyToLabel(lbl, baseName, tag, col)
@@ -452,7 +465,7 @@ local function updateUniversalNameTag()
                     if lbl:IsA("TextLabel") then
                         local orig = lbl:GetAttribute("WR_OrigText")
                         if orig then applyToLabel(lbl, orig, tag, col)
-                        elseif lbl.Text == pName or lbl.Text == pDisplay or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
+                        elseif lbl.Text == pName or lbl.Text == pDisplay or string_find(lbl.Text, pName, 1, true) or string_find(lbl.Text, pDisplay, 1, true) then
                             applyToLabel(lbl, pDisplay, tag, col)
                         end
                     end
@@ -478,7 +491,7 @@ local function updateUniversalNameTag()
         if pList then
             for _, lbl in ipairs(pList:GetDescendants()) do
                 if lbl:IsA("TextLabel") and not State.Cache.TrackedLabels[lbl] then
-                    if lbl.Text == pName or lbl.Text == pDisplay or lbl.Text == "@" .. pName or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
+                    if lbl.Text == pName or lbl.Text == pDisplay or lbl.Text == "@" .. pName or string_find(lbl.Text, pName, 1, true) or string_find(lbl.Text, pDisplay, 1, true) then
                         applyToLabel(lbl, pDisplay, tag, col)
                     end
                 end
@@ -489,11 +502,11 @@ local function updateUniversalNameTag()
     pcall(function()
         for _, gui in ipairs(Player.PlayerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name ~= "Obsidian" and gui.Name ~= "WhiteRose" then
-                local gName = string.lower(gui.Name)
-                if string.find(gName, "leader") or string.find(gName, "player") or string.find(gName, "tab") or string.find(gName, "board") or string.find(gName, "list") or string.find(gName, "main") then
+                local gName = string_lower(gui.Name)
+                if string_find(gName, "leader") or string_find(gName, "player") or string_find(gName, "tab") or string_find(gName, "board") or string_find(gName, "list") or string_find(gName, "main") then
                     for _, lbl in ipairs(gui:GetDescendants()) do
                         if lbl:IsA("TextLabel") and not State.Cache.TrackedLabels[lbl] then
-                            if lbl.Text == pName or lbl.Text == pDisplay or string.find(lbl.Text, pName, 1, true) or string.find(lbl.Text, pDisplay, 1, true) then
+                            if lbl.Text == pName or lbl.Text == pDisplay or string_find(lbl.Text, pName, 1, true) or string_find(lbl.Text, pDisplay, 1, true) then
                                 applyToLabel(lbl, pDisplay, tag, col)
                             end
                         end
@@ -527,11 +540,14 @@ local function fullReset(c)
     applyAnim(c, "None")
 end
 
--- // Action Handlers (With Universal R6/R15 Korblox) \ --
+-- // Action Handlers (With Universal Headless & Dual R6/R15 Korblox) \ --
 allActions = {
     ["Headless"] = { category = "Body", type = "Function", action = function(c, e)
         local h = c and c:FindFirstChild("Head") if not h then return end
-        if not State.Orig.Headless then local sm = h:FindFirstChildOfClass("SpecialMesh") State.Orig.Headless = { t = h.Transparency, s = sm and sm.Scale } end
+        if not State.Orig.Headless then
+            local sm = h:FindFirstChildOfClass("SpecialMesh")
+            State.Orig.Headless = { t = h.Transparency, s = sm and sm.Scale }
+        end
         h.Transparency = e and 1 or (State.Orig.Headless.t or 0)
         local sm = h:FindFirstChildOfClass("SpecialMesh")
         if sm then sm.Scale = e and Vector3.zero or (State.Orig.Headless.s or Vector3.one) end
@@ -630,7 +646,7 @@ allActions = {
     ["Naked"] = { category = "Body", type = "Function", action = function(c, e) for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do if e then CM:Hide(c, t) else CM:Show(c, t) end end end },
     ["Remove Hair"] = { category = "Body", type = "Function", action = function(c, e)
         if not c then return end
-        if e then for _, h in ipairs(c:GetChildren()) do if h:IsA("Accessory") and pcall(function() return h.AccessoryType end) and h.AccessoryType == Enum.AccessoryType.Hair then table.insert(State.Orig.Clothing.Hair, h) h.Parent = nil end end
+        if e then for _, h in ipairs(c:GetChildren()) do if h:IsA("Accessory") and pcall(function() return h.AccessoryType end) and h.AccessoryType == Enum.AccessoryType.Hair then table_insert(State.Orig.Clothing.Hair, h) h.Parent = nil end end
         else for _, h in ipairs(State.Orig.Clothing.Hair) do h.Parent = c end State.Orig.Clothing.Hair = {} end
     end },
     ["Epic Face"] = { category = "Faces", type = "Function", action = function(c) applyFace(c) end },
@@ -660,7 +676,7 @@ allActions = {
     ["Remove Original T-Shirts"] = { category = "Outfit", type = "Function", action = function(c, e) if e then CM:Hide(c, "TShirt") else CM:Show(c, "TShirt") end end },
     ["Remove Original Accessories"] = { category = "Outfit", type = "Function", action = function(c, e)
         if not c then return end
-        if e then for _, it in ipairs(c:GetChildren()) do if it:IsA("Accessory") and not it:GetAttribute("WR_Acc") then table.insert(State.Orig.Clothing.Accessories, it) it.Parent = nil end end
+        if e then for _, it in ipairs(c:GetChildren()) do if it:IsA("Accessory") and not it:GetAttribute("WR_Acc") then table_insert(State.Orig.Clothing.Accessories, it) it.Parent = nil end end
         else for _, it in ipairs(State.Orig.Clothing.Accessories) do pcall(function() it.Parent = c end) end State.Orig.Clothing.Accessories = {} end
     end }
 }
@@ -710,7 +726,7 @@ G.Custom:AddInput("CustomAssetID", { Text = "Roblox Asset ID", Placeholder = "En
 G.Custom:AddDropdown("CustomAssetType", { Text = "Asset Type", Values = { "Accessory / Hair", "Shirt", "Pants", "T-Shirt" }, Default = "Accessory / Hair" })
 G.Custom:AddButton("Load Asset 🚀", function()
     local idStr = getOpt("CustomAssetID", "")
-    local cleanId = tonumber(string.match(idStr, "%d+"))
+    local cleanId = tonumber(string_match(idStr, "%d+"))
     if not cleanId then return Library:Notify({ Title = "Loader", Content = "Please enter a valid numeric ID!", Duration = 3 }) end
     local aType, char = getOpt("CustomAssetType", "Accessory / Hair"), Player.Character
     if not char then return end
@@ -725,10 +741,10 @@ G.Custom:AddButton("Load Asset 🚀", function()
                 if acc then
                     acc:SetAttribute("WR_Acc", true)
                     acc:SetAttribute("WR_Custom", true)
-                    if weldAcc(char, acc) then table.insert(State.Scripted.CustomAccs, acc) end
+                    if weldAcc(char, acc) then table_insert(State.Scripted.CustomAccs, acc) end
                 elseif attachHair(char, clone) then
                     clone:SetAttribute("WR_Custom", true)
-                    table.insert(State.Scripted.CustomAccs, clone)
+                    table_insert(State.Scripted.CustomAccs, clone)
                 end
                 Library:Notify({ Title = "Asset Loader", Content = "Custom item attached!", Duration = 3 })
             else
@@ -841,15 +857,15 @@ for i = 1, 16 do
     local st = Instance.new("UIStroke", f)
     st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     st.LineJoinMode = Enum.LineJoinMode.Miter
-    table.insert(chElements, { frame = f, stroke = st })
+    table_insert(chElements, { frame = f, stroke = st })
 end
 
--- // High-Performance & Accurate Render Loop \ --
+-- // High-Performance & Fast-Math Render Loop \ --
 State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
     if not Options.CrosshairRadius then return end
     local _t = tick()
     local mLoc = UserInputService:GetMouseLocation()
-    local gIns = ScreenGui.IgnoreGuiInset and Vector2.zero or GuiService:GetGuiInset()
+    local gIns = ScreenGui.IgnoreGuiInset and Vector2.zero or cachedGuiInset
     local finalM = mLoc - gIns
 
     local chEn, wmEn = getTog("CrosshairEnable"), getTog("WatermarkEnable")
@@ -871,7 +887,7 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
         local outThick = getOpt("CrosshairOutlineThickness", 1)
         local outCol = (Options.CrosshairOutlineColor and Options.CrosshairOutlineColor.Value) or Color3.new(0, 0, 0)
 
-        local len = pulseEn and (pulseMin + ((pulseMax - pulseMin) * ((math.sin(math.rad(_t * pulseSpeed)) + 1) / 2))) or baseLen
+        local len = pulseEn and (pulseMin + ((pulseMax - pulseMin) * ((math_sin(math_rad(_t * pulseSpeed)) + 1) / 2))) or baseLen
         local rotOffset = rotEn and (_t * rotSpeed % 360) or 0
         local distFromCenter = rad + (len / 2)
 
@@ -881,12 +897,12 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
             if idx <= lines then
                 f.Visible = true
                 local ang = (idx - 1) * (360 / lines) + rotOffset
-                local rAng = math.rad(ang)
-                local px = math.round(finalM.X + math.sin(rAng) * distFromCenter)
-                local py = math.round(finalM.Y + math.cos(rAng) * distFromCenter)
+                local rAng = math_rad(ang)
+                local px = math_round(finalM.X + math_sin(rAng) * distFromCenter)
+                local py = math_round(finalM.Y + math_cos(rAng) * distFromCenter)
 
                 f.Position = UDim2.fromOffset(px, py)
-                f.Size = UDim2.fromOffset(math.round(width), math.round(len))
+                f.Size = UDim2.fromOffset(math_round(width), math_round(len))
                 f.Rotation = -ang
                 f.BackgroundColor3 = col
 
@@ -906,7 +922,7 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
         wmObject.TextColor3 = col
         wmObject.TextStrokeColor3 = (Options.WatermarkOutlineColor and Options.WatermarkOutlineColor.Value) or Color3.new(0, 0, 0)
         wmObject.TextStrokeTransparency = getTog("WatermarkOutlineEnable") and 0 or 1
-        wmObject.Position = UDim2.fromOffset(math.round(finalM.X + getOpt("WatermarkOffsetX", 0)), math.round(finalM.Y + getOpt("WatermarkOffsetY", 30)))
+        wmObject.Position = UDim2.fromOffset(math_round(finalM.X + getOpt("WatermarkOffsetX", 0)), math_round(finalM.Y + getOpt("WatermarkOffsetY", 30)))
     end
 end)
 
@@ -1004,12 +1020,12 @@ G.TitanEnv:AddSlider("RainIntensitySlider", { Text = "Rain & Storm Intensity", D
     end
 end })
 
--- // Complete & Instant Minecraft Textures Engine \ --
+-- // Complete & Filtered Minecraft Textures Engine \ --
 G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
         local MS = game:GetService("MaterialService")
         for _, c in ipairs(MS:GetChildren()) do
-            if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then
+            if c:IsA("MaterialVariant") and string_sub(c.Name, 1, 4) == "abs_" then
                 pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
                 safeDestroy(c)
             end
@@ -1018,7 +1034,7 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
         local activeVariants = {}
         for matEnum, idList in pairs(MC_MATERIALS) do
             local rawId = idList[math.random(1, #idList)]
-            local formattedId = string.find(rawId, "rbxassetid://") and rawId or ("rbxassetid://" .. rawId)
+            local formattedId = string_find(rawId, "rbxassetid://") and rawId or ("rbxassetid://" .. rawId)
             local variantName = "abs_" .. matEnum.Name
 
             local v = Instance.new("MaterialVariant")
@@ -1032,10 +1048,16 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
             pcall(function() MS:SetBaseMaterialOverride(matEnum, variantName) end)
         end
 
-        local function cleanPart(p)
-            if not p or not p.Parent or not p:IsA("BasePart") or p:IsA("Terrain") then return end
-            if p:FindFirstAncestorWhichIsA("Tool") or p:FindFirstAncestorWhichIsA("Model"):FindFirstChildOfClass("Humanoid") then return end
+        local function shouldQueuePart(p)
+            if not p or not p:IsA("BasePart") or p:IsA("Terrain") then return false end
+            if not p.Parent or p:IsDescendantOf(Workspace.CurrentCamera) then return false end
+            if p:FindFirstAncestorWhichIsA("Tool") or p:FindFirstAncestorWhichIsA("Model"):FindFirstChildOfClass("Humanoid") then return false end
+            if not p.CanCollide and (p.Name == "Bullet" or p.Name == "Debris" or p.Name == "Part" or p.Size.Magnitude < 0.5) then return false end
+            return true
+        end
 
+        local function cleanPart(p)
+            if not shouldQueuePart(p) then return end
             local var = activeVariants[p.Material]
             if var then
                 p.MaterialVariant = var
@@ -1055,9 +1077,9 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
             isProcessing = true
             task.spawn(function()
                 while #partQueue > 0 do
-                    local count = math.min(150, #partQueue)
+                    local count = math_min(150, #partQueue)
                     for _ = 1, count do
-                        local p = table.remove(partQueue)
+                        local p = table_remove(partQueue)
                         if p then pcall(cleanPart, p) end
                     end
                     task.wait(0.02)
@@ -1068,14 +1090,14 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
 
         if State.Conn.Env["MC_Tex"] then State.Conn.Env["MC_Tex"]:Disconnect() end
         State.Conn.Env["MC_Tex"] = Workspace.DescendantAdded:Connect(function(p)
-            if p:IsA("BasePart") then
-                table.insert(partQueue, p)
+            if shouldQueuePart(p) then
+                table_insert(partQueue, p)
                 runQueue()
             end
         end)
 
         for _, d in ipairs(Workspace:GetDescendants()) do
-            if d:IsA("BasePart") then table.insert(partQueue, d) end
+            if shouldQueuePart(d) then table_insert(partQueue, d) end
         end
         runQueue()
 
@@ -1083,7 +1105,7 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     end)
 end)
 
--- // Universal Sky & Studio Pink Sky Engines (Clean Seamless Horizon) \ --
+-- // Throttled Universal Sky & Pink Sky Engines \ --
 G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
     local pinkSkyBox = {
         SkyboxBk = "rbxassetid://271042516",
@@ -1121,7 +1143,7 @@ G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string_match(d.Name, "^MyRTX_") then safeDestroy(d) end
     end
     enforcePinkSky()
 
@@ -1129,11 +1151,17 @@ G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
     if State.Conn.Env["Sky2"] then State.Conn.Env["Sky2"]:Disconnect() end
 
     State.Conn.Env["Sky1"] = Lighting.ChildAdded:Connect(function(d)
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string_match(d.Name, "^MyRTX_") then
             task.defer(function() safeDestroy(d) end)
         end
     end)
-    State.Conn.Env["Sky2"] = RunService.RenderStepped:Connect(enforcePinkSky)
+
+    local lastSkyCheck = 0
+    State.Conn.Env["Sky2"] = RunService.Heartbeat:Connect(function()
+        if tick() - lastSkyCheck < 0.25 then return end
+        lastSkyCheck = tick()
+        enforcePinkSky()
+    end)
 
     Library:Notify({ Title = "System", Content = "Pink Sky enforced continuously!", Duration = 3 })
 end)
@@ -1151,11 +1179,11 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
         if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
         if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
         if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
-        if Lighting.OutdoorAmbient ~= targetOutdoor then Lighting.OutdoorAmbient = targetOutdoor end
+        if Lighting.OutdoorAmbient ~= targetAmbient then Lighting.OutdoorAmbient = targetAmbient end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string_match(d.Name, "^MyRTX_") then safeDestroy(d) end
     end
     enforceSky()
 
@@ -1163,11 +1191,17 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
     if State.Conn.Env["Sky2"] then State.Conn.Env["Sky2"]:Disconnect() end
 
     State.Conn.Env["Sky1"] = Lighting.ChildAdded:Connect(function(d)
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string_match(d.Name, "^MyRTX_") then
             task.defer(function() safeDestroy(d) end)
         end
     end)
-    State.Conn.Env["Sky2"] = RunService.RenderStepped:Connect(enforceSky)
+
+    local lastSkyCheck = 0
+    State.Conn.Env["Sky2"] = RunService.Heartbeat:Connect(function()
+        if tick() - lastSkyCheck < 0.25 then return end
+        lastSkyCheck = tick()
+        enforceSky()
+    end)
 
     Library:Notify({ Title = "System", Content = "Universal Sky enforced continuously!", Duration = 3 })
 end)
@@ -1242,7 +1276,7 @@ G.TitanVis:AddButton("Activate RTX Ultra Day ☀️", function() applyRTXPreset(
 G.TitanVis:AddButton("Activate RTX Cyberpunk Night 🌙", function() applyRTXPreset("Night") Library:Notify({ Title = "RTX Engine", Content = "RTX Cyberpunk Night Applied!", Duration = 3 }) end)
 G.TitanVis:AddButton("Reset Lighting to Default 🔄", function()
     for _, d in ipairs(Lighting:GetChildren()) do
-        if string.match(d.Name, "^MyRTX_") or d:IsA("SunRaysEffect") then safeDestroy(d) end
+        if string_match(d.Name, "^MyRTX_") or d:IsA("SunRaysEffect") then safeDestroy(d) end
     end
     local resetProps = {
         ClockTime = 14, Brightness = 2, Ambient = Color3.fromRGB(128, 128, 128),
@@ -1289,14 +1323,14 @@ G.Tools:AddButton("Unload Script", function()
 
     local MS = game:GetService("MaterialService")
     for _, c in ipairs(MS:GetChildren()) do
-        if c:IsA("MaterialVariant") and string.sub(c.Name, 1, 4) == "abs_" then
+        if c:IsA("MaterialVariant") and string_sub(c.Name, 1, 4) == "abs_" then
             pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
             safeDestroy(c)
         end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
-        if string.match(d.Name, "^MyRTX_") or d:IsA("SunRaysEffect") then safeDestroy(d) end
+        if string_match(d.Name, "^MyRTX_") or d:IsA("SunRaysEffect") then safeDestroy(d) end
     end
 
     cleanTableInstances(State.Cache.AccTmpl)
@@ -1327,7 +1361,7 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     stopEmote()
     State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {}, SkyObject = nil }
     State.Orig.Clothing, State.Orig.LimbColors, State.Orig.LimbData, State.Cache.Applied = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}, {}, {}
-    State.Cache.TrackedLabels = {}
+    State.Cache.TrackedLabels = setmetatable({}, { __mode = "k" })
 
     task.spawn(function()
         local hum = c:WaitForChild("Humanoid", 2)
