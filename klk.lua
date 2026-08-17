@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.5 - Turbo Instant Respawn Edition
-    (0ms Instant Respawn Load + 1-Click RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair)
+    WhiteRose V8.6 - Seamless Horizon & Master Visuals Suite
+    (Fixed Orange Void/Horizon Seam + Turbo Respawn + 1-Click RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Turbo Respawn | v8.5", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Seamless Horizon | v8.6", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -910,7 +910,7 @@ State.Conn.CrosshairRender = RunService.RenderStepped:Connect(function()
     end
 end)
 
--- // Titan Engine Tools (Optimized Rain & Classic Fog Engine) \ --
+-- // Titan Engine Tools (Seamless Horizon Rain & Fog Engine) \ --
 G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false, Callback = function(enabled)
     pcall(function() RunService:UnbindFromRenderStep("ExecutorRainLoop") end)
     local oldPart = Workspace:FindFirstChild("MyExecutorRainPart")
@@ -920,11 +920,11 @@ G.TitanEnv:AddToggle("RainToggle", { Text = "Enable Rain & Fog", Default = false
         Lighting.FogStart = 0
         playSafeTween(Lighting, {
             FogEnd = 100000,
-            FogColor = Color3.fromRGB(190, 190, 190)
+            FogColor = Color3.fromRGB(235, 185, 205)
         })
-        local atm = Lighting:FindFirstChild("MyRTX_Atmosphere")
-        if atm and atm:IsA("Atmosphere") then
-            playSafeTween(atm, { Density = (Lighting.ClockTime < 6 or Lighting.ClockTime > 18) and 0.45 or 0.28, Haze = 0.5 })
+        local atm = Lighting:FindFirstChild("MyRTX_Atmosphere") or Lighting:FindFirstChildOfClass("Atmosphere")
+        if atm then
+            playSafeTween(atm, { Density = 0, Haze = 0, Glare = 0 })
         end
         return
     end
@@ -1083,7 +1083,7 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     end)
 end)
 
--- // Universal Sky & Studio Pink Sky Engines \ --
+-- // Universal Sky & Studio Pink Sky Engines (Clean Seamless Horizon) \ --
 G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
     local pinkSkyBox = {
         SkyboxBk = "rbxassetid://271042516",
@@ -1111,6 +1111,14 @@ G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
         if Lighting.Brightness ~= 2.2 then Lighting.Brightness = 2.2 end
         if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
         if Lighting.OutdoorAmbient ~= targetOutdoor then Lighting.OutdoorAmbient = targetOutdoor end
+
+        -- Neutralize orange scattering in atmosphere
+        local atm = Lighting:FindFirstChild("MyRTX_Atmosphere") or Lighting:FindFirstChildOfClass("Atmosphere")
+        if atm and atm.Density > 0 then
+            atm.Density = 0
+            atm.Haze = 0
+            atm.Glare = 0
+        end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
@@ -1193,9 +1201,9 @@ local function applyRTXPreset(mode)
             lightingProps.FogColor = Color3.fromRGB(215, 225, 240)
             lightingProps.FogStart = 500
             lightingProps.FogEnd = 2500
-            playSafeTween(atm, { Density = 0.28, Offset = 0.25, Haze = 0.5, Glare = 0.4, Color = Color3.fromRGB(195, 210, 235), Decay = Color3.fromRGB(105, 115, 135) })
+            playSafeTween(atm, { Density = 0, Offset = 0.25, Haze = 0, Glare = 0, Color = Color3.fromRGB(195, 210, 235), Decay = Color3.fromRGB(105, 115, 135) })
         else
-            playSafeTween(atm, { Density = 0, Haze = 0 })
+            playSafeTween(atm, { Density = 0, Haze = 0, Glare = 0 })
         end
         playSafeTween(Lighting, lightingProps)
         playSafeTween(blm, { Intensity = 0.35, Size = 14, Threshold = 0.9 })
@@ -1211,9 +1219,9 @@ local function applyRTXPreset(mode)
             lightingProps.FogColor = Color3.fromRGB(15, 18, 30)
             lightingProps.FogStart = 100
             lightingProps.FogEnd = 1200
-            playSafeTween(atm, { Density = 0.45, Offset = 0.1, Haze = 0.8, Glare = 0, Color = Color3.fromRGB(20, 25, 45), Decay = Color3.fromRGB(10, 15, 30) })
+            playSafeTween(atm, { Density = 0, Offset = 0.1, Haze = 0, Glare = 0, Color = Color3.fromRGB(20, 25, 45), Decay = Color3.fromRGB(10, 15, 30) })
         else
-            playSafeTween(atm, { Density = 0, Haze = 0 })
+            playSafeTween(atm, { Density = 0, Haze = 0, Glare = 0 })
         end
         playSafeTween(Lighting, lightingProps)
         playSafeTween(blm, { Intensity = 0.8, Size = 20, Threshold = 0.75 })
@@ -1318,10 +1326,8 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
         local head = c:WaitForChild("Head", 2)
         if not c.Parent or State.CharGen ~= curGen then return end
 
-        -- Pass 1: Instant In-Memory Injection (0ms)
         instantSync(c)
 
-        -- Pass 2: Fast-Track Animation Sync
         task.spawn(function()
             local anim = c:FindFirstChild("Animate") or c:WaitForChild("Animate", 1.5)
             if anim and c.Parent and State.CharGen == curGen then
@@ -1329,7 +1335,6 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
             end
         end)
 
-        -- Pass 3: Background Descendant Added Enforcer
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
         local enforcePending = false
         State.Conn.Env["AppEnforce"] = c.DescendantAdded:Connect(function(d)
