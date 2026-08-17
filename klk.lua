@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.2 - Pink Sky & Master Visuals Suite
-    (Enforce Pink Sky + Universal Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
+    WhiteRose V8.3 - Clean Lighting & Master Visuals Suite
+    (SunRays Removed + Pink Sky + Universal NameTag + Dual R6/R15 Korblox + Centered Crosshair + Classic Fog)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -21,7 +21,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Pink Sky | v8.2", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Clean RTX | v8.3", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -1087,7 +1087,7 @@ G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
     end
     enforcePinkSky()
 
@@ -1095,7 +1095,7 @@ G.TitanEnv:AddButton("Enforce Pink Sky 🌸", function()
     if State.Conn.Env["Sky2"] then State.Conn.Env["Sky2"]:Disconnect() end
 
     State.Conn.Env["Sky1"] = Lighting.ChildAdded:Connect(function(d)
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then
             task.defer(function() safeDestroy(d) end)
         end
     end)
@@ -1121,7 +1121,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
     end
     enforceSky()
 
@@ -1129,7 +1129,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
     if State.Conn.Env["Sky2"] then State.Conn.Env["Sky2"]:Disconnect() end
 
     State.Conn.Env["Sky1"] = Lighting.ChildAdded:Connect(function(d)
-        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect") or d:IsA("SunRaysEffect")) and not string.match(d.Name, "^MyRTX_") then
+        if (d:IsA("Atmosphere") or d:IsA("BloomEffect") or d:IsA("ColorCorrectionEffect")) and not string.match(d.Name, "^MyRTX_") then
             task.defer(function() safeDestroy(d) end)
         end
     end)
@@ -1138,13 +1138,16 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
     Library:Notify({ Title = "System", Content = "Universal Sky enforced continuously!", Duration = 3 })
 end)
 
--- // Clean RTX Engine (Compatible with Classic Fog) \ --
+-- // Clean RTX Engine (Without SunRaysEffect & Blinding Glare) \ --
 local function applyRTXPreset(mode)
     local atm = getEffect("Atmosphere", "MyRTX_Atmosphere")
     local blm = getEffect("BloomEffect", "MyRTX_Bloom")
-    local sun = getEffect("SunRaysEffect", "MyRTX_SunRays")
     local col = getEffect("ColorCorrectionEffect", "MyRTX_Color")
     local blr = getEffect("BlurEffect", "MyRTX_Blur")
+
+    -- Clean up any active SunRays
+    local oldSun = Lighting:FindFirstChild("MyRTX_SunRays") or Lighting:FindFirstChildOfClass("SunRaysEffect")
+    if oldSun then safeDestroy(oldSun) end
 
     Lighting.GlobalShadows = true
     Lighting.ShadowSoftness = 0.2
@@ -1169,7 +1172,6 @@ local function applyRTXPreset(mode)
             playSafeTween(atm, { Density = 0, Haze = 0 })
         end
         playSafeTween(Lighting, lightingProps)
-        playSafeTween(sun, { Intensity = 0.12, Spread = 0.35 })
         playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 0.4), Size = 16, Threshold = 0.88 })
         playSafeTween(col, { Brightness = 0.02, Contrast = getOpt("RTXContrastSlider", 0.15), Saturation = getOpt("RTXSaturationSlider", 0.18), TintColor = Color3.fromRGB(255, 252, 248) })
 
@@ -1188,7 +1190,6 @@ local function applyRTXPreset(mode)
             playSafeTween(atm, { Density = 0, Haze = 0 })
         end
         playSafeTween(Lighting, lightingProps)
-        playSafeTween(sun, { Intensity = 0, Spread = 0.1 })
         playSafeTween(blm, { Intensity = getOpt("RTXBloomSlider", 1.0), Size = 24, Threshold = 0.72 })
         playSafeTween(col, { Brightness = 0, Contrast = getOpt("RTXContrastSlider", 0.22), Saturation = getOpt("RTXSaturationSlider", 0.22), TintColor = Color3.fromRGB(210, 230, 255) })
     end
@@ -1224,7 +1225,7 @@ G.TitanVis:AddSlider("RTXContrastSlider", {
 
 G.TitanVis:AddButton("Reset Lighting to Default 🔄", function()
     for _, d in ipairs(Lighting:GetChildren()) do
-        if string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+        if string.match(d.Name, "^MyRTX_") or d:IsA("SunRaysEffect") then safeDestroy(d) end
     end
     local resetProps = {
         ClockTime = 14, Brightness = 2, Ambient = Color3.fromRGB(128, 128, 128),
@@ -1278,7 +1279,7 @@ G.Tools:AddButton("Unload Script", function()
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
-        if string.match(d.Name, "^MyRTX_") then safeDestroy(d) end
+        if string.match(d.Name, "^MyRTX_") or d:IsA("SunRaysEffect") then safeDestroy(d) end
     end
 
     cleanTableInstances(State.Cache.AccTmpl)
