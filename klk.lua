@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.8 - Ultra-Engine Optimized Edition
-    (Weak-Table Memory Safety + Fast-Math Crosshair + Throttled Sky + MeshPart Headless + Debris Filter)
+    WhiteRose V8.9 - Persistent Clothing & Master Visuals Suite
+    (Fixed Missing Shirt Bug + Turbo Respawn + Fog-Sync RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -26,7 +26,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Ultra Engine | v8.8", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Persistent Clothing | v8.9", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -59,11 +59,12 @@ local MC_MATERIALS = {
     [Enum.Material.Snow] = { "11108916253" }, [Enum.Material.Wood] = { "11546477504" }, [Enum.Material.WoodPlanks] = { "11546480686" }
 }
 
--- // State & Memory Management (With Weak Reference Tables) \ --
+-- // State & Memory Management \ --
 local allActions = {}
 local State = {
     Orig = { LimbColors = {}, Sound = {}, Lighting = {}, Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, LimbData = {} },
     Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil, CustomAccs = {}, SkyObject = nil },
+    CustomClothing = { Shirt = nil, Pants = nil, TShirt = nil },
     Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {}, TrackedLabels = setmetatable({}, { __mode = "k" }) },
     CharGen = 0
 }
@@ -103,7 +104,7 @@ local function isR6(c) local h = c and c:FindFirstChildOfClass("Humanoid") retur
 local function isScriptedItem(inst)
     local cur = inst
     while cur and cur ~= game do
-        if (cur:IsA("Accessory") and cur:GetAttribute("WR_Acc")) or cur:GetAttribute("WR_Hair") or cur.Name == "WR_Item" or cur:GetAttribute("WR_Custom") then return true end
+        if (cur:IsA("Accessory") and cur:GetAttribute("WR_Acc")) or cur:GetAttribute("WR_Hair") or string_find(tostring(cur.Name), "^WR_") or cur:GetAttribute("WR_Custom") then return true end
         cur = cur.Parent
     end
     return false
@@ -314,34 +315,88 @@ local function applyFace(c)
     face.Texture = getTog("Epic Face") and CFG.IDs.FaceTexture or (State.Orig.FaceTex or "")
 end
 
+-- // Persistent Clothing Engine with Auto-Watchdog \ --
 local CM = { Hidden = {}, Types = { Shirt = { c = "Shirt", p = "ShirtTemplate" }, Pants = { c = "Pants", p = "PantsTemplate" }, TShirt = { c = "ShirtGraphic", p = "Graphic" } } }
+
 local function restoreClothing(char, typeStr)
     local orig = State.Orig.Clothing
     if typeStr == "TShirt" then for _, it in ipairs(orig.TShirts) do pcall(function() it.Parent = char end) end orig.TShirts = {}
     elseif orig[typeStr] then pcall(function() orig[typeStr].Parent = char end) orig[typeStr] = nil end
 end
+
 local function storeClothing(char, typeStr, cls)
     local orig = State.Orig.Clothing
     if typeStr == "TShirt" then
         if #orig.TShirts > 0 then return end
-        for _, it in ipairs(char:GetChildren()) do if it:IsA(cls) and it ~= State.Scripted.TShirt and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then table_insert(orig.TShirts, it) end end
+        for _, it in ipairs(char:GetChildren()) do if it:IsA(cls) and not isScriptedItem(it) and pcall(function() it.Parent = nil end) then table_insert(orig.TShirts, it) end end
     elseif not orig[typeStr] then
-        local it = char:FindFirstChildOfClass(cls) if it and it.Name ~= "WR_Item" and pcall(function() it.Parent = nil end) then orig[typeStr] = it end
+        local it = char:FindFirstChildOfClass(cls) if it and not isScriptedItem(it) and pcall(function() it.Parent = nil end) then orig[typeStr] = it end
     end
 end
 
 function CM:Apply(c, t, name)
-    if not c or self.Hidden[t] then return end local def, id = self.Types[t], CFG.Clothes[t][name]
-    if name == "Remove" then safeDestroy(State.Scripted[t]) State.Scripted[t] = nil storeClothing(c, t, def.c) return end
-    local tmpl = id
-    if type(id) == "number" then
-        local k = def.c .. ":" .. id tmpl = State.Cache.ClothTmpl[k] or (function() local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. id) local it = ok and o and (o[1]:IsA(def.c) and o[1] or o[1]:FindFirstChildWhichIsA(def.c, true)) local val = it and it[def.p] if val then State.Cache.ClothTmpl[k] = val end return val end)()
+    if not c or self.Hidden[t] then return end
+    local def = self.Types[t]
+    local id = CFG.Clothes[t][name]
+
+    if name == "Remove" then
+        safeDestroy(State.Scripted[t])
+        State.Scripted[t] = nil
+        storeClothing(c, t, def.c)
+        return
     end
-    safeDestroy(State.Scripted[t]) State.Scripted[t] = nil
-    if not tmpl then restoreClothing(c, t) return end
-    storeClothing(c, t, def.c)
-    local item = Instance.new(def.c) item.Name, item[def.p], item.Parent = "WR_Item", tmpl, c State.Scripted[t] = item
+
+    local rawVal = id or State.CustomClothing[t]
+    if not rawVal then
+        safeDestroy(State.Scripted[t])
+        State.Scripted[t] = nil
+        restoreClothing(c, t)
+        return
+    end
+
+    local function injectClothing(tmplVal)
+        if not c or not c.Parent or not tmplVal then return end
+        storeClothing(c, t, def.c)
+        local existing = c:FindFirstChild("WR_" .. t)
+        if existing and existing:IsA(def.c) then
+            if existing[def.p] ~= tmplVal then existing[def.p] = tmplVal end
+            State.Scripted[t] = existing
+        else
+            safeDestroy(State.Scripted[t])
+            local item = Instance.new(def.c)
+            item.Name = "WR_" .. t
+            item[def.p] = tmplVal
+            item.Parent = c
+            State.Scripted[t] = item
+        end
+    end
+
+    if type(rawVal) == "string" then
+        injectClothing(rawVal)
+    elseif type(rawVal) == "number" then
+        local k = def.c .. ":" .. rawVal
+        local cached = State.Cache.ClothTmpl[k]
+        if cached then
+            injectClothing(cached)
+        else
+            task.spawn(function()
+                for _ = 1, 6 do
+                    if not c or not c.Parent then return end
+                    local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. rawVal)
+                    local it = ok and o and (o[1]:IsA(def.c) and o[1] or o[1]:FindFirstChildWhichIsA(def.c, true))
+                    local val = it and it[def.p]
+                    if val then
+                        State.Cache.ClothTmpl[k] = val
+                        injectClothing(val)
+                        break
+                    end
+                    task.wait(0.25)
+                end
+            end)
+        end
+    end
 end
+
 function CM:Hide(c, t) if not c or self.Hidden[t] then return end safeDestroy(State.Scripted[t]) State.Scripted[t] = nil storeClothing(c, t, self.Types[t].c) self.Hidden[t] = true end
 function CM:Show(c, t) if not self.Hidden[t] then return end self.Hidden[t] = nil restoreClothing(c, t) self:Apply(c, t, getOpt(t .. "Selector", "None")) end
 function CM:Restore(c) if not c then return end for t in pairs(self.Types) do safeDestroy(State.Scripted[t]) State.Scripted[t] = nil restoreClothing(c, t) self.Hidden[t] = nil end end
@@ -520,6 +575,7 @@ end
 local function fullReset(c)
     stopEmote()
     State.Cache.Sig, State.Cache.Char, State.Cache.Applied = nil, nil, {}
+    State.CustomClothing = { Shirt = nil, Pants = nil, TShirt = nil }
     safeDestroy(State.Scripted.HeadlessMesh)
     safeDestroy(State.Scripted.SkyObject) State.Scripted.SkyObject = nil
     restoreNameTags()
@@ -540,7 +596,7 @@ local function fullReset(c)
     applyAnim(c, "None")
 end
 
--- // Action Handlers (With Universal Headless & Dual R6/R15 Korblox) \ --
+-- // Action Handlers \ --
 allActions = {
     ["Headless"] = { category = "Body", type = "Function", action = function(c, e)
         local h = c and c:FindFirstChild("Head") if not h then return end
@@ -658,8 +714,8 @@ allActions = {
                 local h = Instance.new("Part", acc) h.Name, h.Size, h.Transparency = "Handle", Vector3.one, 1
                 local m = Instance.new("SpecialMesh", h) m.MeshType, m.MeshId, m.Scale = Enum.MeshType.FileMesh, "rbxassetid://111022241256851", Vector3.new(1.03, 1.03, 1.03)
                 local d = Instance.new("Decal", h) d.Face, d.Texture = Enum.NormalId.Front, "http://www.roblox.com/asset/?id=120935988855219"
-                local ns = Instance.new("Shirt") ns.Name, ns.ShirtTemplate = "WR_Item", "http://www.roblox.com/asset/?id=11275376793"
-                local np = Instance.new("Pants") np.Name, np.PantsTemplate = "WR_Item", "http://www.roblox.com/asset/?id=5043452775"
+                local ns = Instance.new("Shirt") ns.Name = "WR_Shirt" ns.ShirtTemplate = "http://www.roblox.com/asset/?id=11275376793"
+                local np = Instance.new("Pants") np.Name = "WR_Pants" np.PantsTemplate = "http://www.roblox.com/asset/?id=5043452775"
                 State.Scripted.ScarySmile = { acc = acc, shirt = ns, pants = np }
             end
             local it = State.Scripted.ScarySmile CM:Hide(c, "Shirt") CM:Hide(c, "Pants") it.shirt.Parent, it.pants.Parent = c, c
@@ -721,7 +777,7 @@ for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do
     G.Cloth:AddDropdown(t .. "Selector", { Values = getKeys(CFG.Clothes[t]), Default = "None", Text = (t == "TShirt" and "T-Shirt" or t), Callback = function(s) CM:Apply(Player.Character, t, s) end })
 end
 
--- // Custom Asset Loader \ --
+-- // Custom Asset Loader with Persistent Clothing Memory \ --
 G.Custom:AddInput("CustomAssetID", { Text = "Roblox Asset ID", Placeholder = "Enter Catalog ID..." })
 G.Custom:AddDropdown("CustomAssetType", { Text = "Asset Type", Values = { "Accessory / Hair", "Shirt", "Pants", "T-Shirt" }, Default = "Accessory / Hair" })
 G.Custom:AddButton("Load Asset 🚀", function()
@@ -760,10 +816,9 @@ G.Custom:AddButton("Load Asset 🚀", function()
             local it = ok and objs and (objs[1]:IsA(def.c) and objs[1] or objs[1]:FindFirstChildWhichIsA(def.c, true))
             local val = it and it[def.p]
             if val then
-                safeDestroy(State.Scripted[tStr])
-                local item = Instance.new(def.c) item.Name, item[def.p], item.Parent = "WR_Item", val, char
-                State.Scripted[tStr] = item
-                Library:Notify({ Title = "Asset Loader", Content = aType .. " applied!", Duration = 3 })
+                State.CustomClothing[tStr] = val
+                CM:Apply(char, tStr, "None")
+                Library:Notify({ Title = "Asset Loader", Content = aType .. " applied permanently!", Duration = 3 })
             else
                 Library:Notify({ Title = "Asset Loader", Content = "Invalid clothing ID!", Duration = 3 })
             end
@@ -773,6 +828,7 @@ end)
 G.Custom:AddButton("Clear Custom Items 🗑️", function()
     for _, obj in ipairs(State.Scripted.CustomAccs) do safeDestroy(obj) end
     State.Scripted.CustomAccs = {}
+    State.CustomClothing = { Shirt = nil, Pants = nil, TShirt = nil }
     for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do safeDestroy(State.Scripted[t]) State.Scripted[t] = nil CM:Apply(Player.Character, t, getOpt(t .. "Selector", "None")) end
     Library:Notify({ Title = "Asset Loader", Content = "Custom items cleared!", Duration = 3 })
 end)
@@ -1179,7 +1235,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
         if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
         if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
         if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
-        if Lighting.OutdoorAmbient ~= targetAmbient then Lighting.OutdoorAmbient = targetAmbient end
+        if Lighting.OutdoorAmbient ~= targetAmbient then Lighting.OutdoorAmbient = targetOutdoor end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
@@ -1309,6 +1365,7 @@ local function resetAllUI()
     for _, ov in pairs(CFG.Ovr) do if Toggles[ov.k] then Toggles[ov.k]:SetValue(false) end end
     if Options["EmoteSelector"] then Options["EmoteSelector"]:SetValue("None") end
     for _, obj in ipairs(State.Scripted.CustomAccs) do safeDestroy(obj) end State.Scripted.CustomAccs = {}
+    State.CustomClothing = { Shirt = nil, Pants = nil, TShirt = nil }
     stopEmote()
     restoreNameTags()
 end
@@ -1342,7 +1399,7 @@ G.Tools:AddButton("Unload Script", function()
     getgenv().WhiteRoseLoaded = nil Library:Unload()
 end)
 
--- // Turbo Instant Respawn Engine (0ms Fast-Track Lifecycle) \ --
+-- // Turbo Instant Respawn Engine with Clothing Watchdog \ --
 local function instantSync(c)
     if not c or not c.Parent then return end
     pcall(function()
@@ -1377,6 +1434,7 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
             end
         end)
 
+        -- Persistent Watchdog for late server avatar resets
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
         local enforcePending = false
         State.Conn.Env["AppEnforce"] = c.DescendantAdded:Connect(function(d)
