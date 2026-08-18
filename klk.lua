@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V9.1 - Self-Healing AutoLoad Master Edition
-    (Fixed AutoLoad Accessories + Physical Tag Verification + Robust Limb Mapping + Persistent Clothing + Fog-Sync RTX)
+    WhiteRose V9.2 - Zero Memory Leak & Master Visuals Suite
+    (100% Leak-Free Connections + Weak Tables + Physical Tag Verification + Robust Limb Mapping + Fog-Sync RTX)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -26,7 +26,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Self-Healing | v9.1", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Zero Leak | v9.2", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -59,27 +59,17 @@ local MC_MATERIALS = {
     [Enum.Material.Snow] = { "11108916253" }, [Enum.Material.Wood] = { "11546477504" }, [Enum.Material.WoodPlanks] = { "11546480686" }
 }
 
--- // State & Memory Management \ --
+-- // State & Memory Management (Zero-Leak Architecture) \ --
 local allActions = {}
 local State = {
+    Running = true,
     Orig = { LimbColors = {}, Sound = {}, Lighting = {}, Clothing = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, LimbData = {} },
     Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CurrentEmote = nil, CustomAccs = {}, SkyObject = nil },
     CustomClothing = { Shirt = nil, Pants = nil, TShirt = nil },
-    Conn = { Env = {} }, Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {}, TrackedLabels = setmetatable({}, { __mode = "k" }) },
+    Conn = { Env = {}, Camera = {} },
+    Cache = { OrigAnims = {}, ClothTmpl = {}, AccTmpl = {}, Sig = nil, Char = nil, Applied = {}, TrackedLabels = setmetatable({}, { __mode = "k" }) },
     CharGen = 0
 }
-
--- // Dynamic Inset Caching for Crosshair \ --
-local cachedGuiInset = GuiService:GetGuiInset()
-local function refreshGuiInset() cachedGuiInset = GuiService:GetGuiInset() end
-if Workspace.CurrentCamera then Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshGuiInset) end
-Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-    if Workspace.CurrentCamera then Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshGuiInset) end
-end)
-
-local function getKeys(t) local k = {} for i in pairs(t) do table_insert(k, i) end table.sort(k) return k end
-local function getOpt(n, d) return (Options[n] and Options[n].Value ~= nil) and Options[n].Value or d end
-local function getTog(n) return Toggles[n] and Toggles[n].Value or false end
 
 local function safeDestroy(o)
     if o and typeof(o) == "Instance" then
@@ -98,6 +88,25 @@ local function cleanTableInstances(tbl)
         elseif type(v) == "table" then cleanTableInstances(v) end
     end
 end
+
+-- // Dynamic Inset Caching for Crosshair with Clean Listeners \ --
+local cachedGuiInset = GuiService:GetGuiInset()
+local function refreshGuiInset() cachedGuiInset = GuiService:GetGuiInset() end
+
+local function bindCameraViewport()
+    for _, c in ipairs(State.Conn.Camera) do pcall(function() c:Disconnect() end) end
+    State.Conn.Camera = {}
+    if Workspace.CurrentCamera then
+        table_insert(State.Conn.Camera, Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshGuiInset))
+        refreshGuiInset()
+    end
+end
+bindCameraViewport()
+table_insert(State.Conn.Env, Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCameraViewport))
+
+local function getKeys(t) local k = {} for i in pairs(t) do table_insert(k, i) end table.sort(k) return k end
+local function getOpt(n, d) return (Options[n] and Options[n].Value ~= nil) and Options[n].Value or d end
+local function getTog(n) return Toggles[n] and Toggles[n].Value or false end
 
 local function isR6(c) local h = c and c:FindFirstChildOfClass("Humanoid") return (h and h.RigType == Enum.HumanoidRigType.R6) or (c and c:FindFirstChild("Torso") and not c:FindFirstChild("UpperTorso")) end
 
@@ -135,8 +144,8 @@ local function getEffect(cls, name)
     return e
 end
 
--- // Smart Self-Healing Accessory Manager \ --
-local AM = { Conn = {} }
+-- // Leak-Free Accessory Manager with Object-Bound Binds \ --
+local AM = { Binds = setmetatable({}, { __mode = "k" }) }
 local ATT_CF = {
     HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0),
     FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0),
@@ -187,8 +196,20 @@ local function computeAutoHairOffset(head, parts, baseCFrame)
     return CFrame.new(-(min.X + max.X) / 2, (head.Size.Y / 2 + 0.1) - max.Y, -(min.Z + max.Z) / 2)
 end
 
+function AM:Unbind(c)
+    if not c then return end
+    local conns = self.Binds[c]
+    if conns then
+        for _, conn in ipairs(conns) do pcall(function() conn:Disconnect() end) end
+        self.Binds[c] = nil
+    end
+end
+
 function AM:Bind(tp, c)
     if not tp or not c then return end
+    self:Unbind(c)
+    local conns = {}
+
     local function sync()
         if not tp.Parent or not c.Parent then return end
         local char = tp.Parent:IsA("Model") and tp.Parent or (tp.Parent.Parent:IsA("Model") and tp.Parent.Parent or Player.Character)
@@ -209,18 +230,19 @@ function AM:Bind(tp, c)
         if c:IsA("BasePart") then c.Transparency, c.LocalTransparencyModifier = trans, ltm end
     end
 
-    table_insert(self.Conn, tp:GetPropertyChangedSignal("Transparency"):Connect(sync))
-    table_insert(self.Conn, tp:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
+    table_insert(conns, tp:GetPropertyChangedSignal("Transparency"):Connect(sync))
+    table_insert(conns, tp:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
 
     if tp.Name == "Head" and tp.Parent then
         local char = tp.Parent
         local bodyPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
         if bodyPart then
-            table_insert(self.Conn, bodyPart:GetPropertyChangedSignal("Transparency"):Connect(sync))
-            table_insert(self.Conn, bodyPart:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
+            table_insert(conns, bodyPart:GetPropertyChangedSignal("Transparency"):Connect(sync))
+            table_insert(conns, bodyPart:GetPropertyChangedSignal("LocalTransparencyModifier"):Connect(sync))
         end
     end
 
+    self.Binds[c] = conns
     sync()
 end
 
@@ -285,8 +307,8 @@ local function attachHair(char, root, accId)
 end
 
 function AM:Clear(char)
-    for _, c in ipairs(self.Conn) do pcall(function() c:Disconnect() end) end
-    self.Conn = {}
+    for c in pairs(self.Binds) do self:Unbind(c) end
+    self.Binds = setmetatable({}, { __mode = "k" })
     if not char then return end
     for _, c in ipairs(char:GetChildren()) do
         if (c:IsA("Accessory") and c:GetAttribute("WR_Acc")) or c:GetAttribute("WR_Hair") then
@@ -298,7 +320,6 @@ function AM:Clear(char)
     State.Scripted.CustomAccs = {}
 end
 
--- // Self-Healing Robust Sync \\ --
 function AM:Sync(char, groups)
     if not char or not char.Parent then return end
     local targetIds = {}
@@ -318,6 +339,7 @@ function AM:Sync(char, groups)
         local aId = c:GetAttribute("WR_AccId")
         if (c:IsA("Accessory") and c:GetAttribute("WR_Acc")) or c:GetAttribute("WR_Hair") then
             if not aId or not idSet[aId] then
+                self:Unbind(c)
                 local w = c:FindFirstChild("WRA_Weld")
                 if w and w:IsA("ObjectValue") then safeDestroy(w.Value) end
                 safeDestroy(c)
@@ -348,7 +370,6 @@ function AM:Sync(char, groups)
                 task.spawn(function()
                     for _ = 1, 8 do
                         if not char or not char.Parent then return end
-                        -- Verify user still has this active
                         local isStillActive = false
                         for name, act in pairs(allActions) do
                             if getTog(name) and act.type == "Accessory" then
@@ -1251,14 +1272,14 @@ G.TitanEnv:AddButton("Apply MineCraft Textures", function()
 
         if State.Conn.Env["MC_Tex"] then State.Conn.Env["MC_Tex"]:Disconnect() end
         State.Conn.Env["MC_Tex"] = Workspace.DescendantAdded:Connect(function(p)
-            if shouldQueuePart(p) then
+            if shouldQueuePart(p) and #partQueue < 300 then
                 table_insert(partQueue, p)
                 runQueue()
             end
         end)
 
         for _, d in ipairs(Workspace:GetDescendants()) do
-            if shouldQueuePart(d) then table_insert(partQueue, d) end
+            if shouldQueuePart(d) and #partQueue < 300 then table_insert(partQueue, d) end
         end
         runQueue()
 
@@ -1477,9 +1498,13 @@ end
 
 G.Tools:AddButton("Reset All", function() resetAllUI() fullReset(Player.Character) end)
 G.Tools:AddButton("Unload Script", function()
+    State.Running = false
     if State.Conn.CrosshairRender then State.Conn.CrosshairRender:Disconnect() State.Conn.CrosshairRender = nil end
     if chContainer then safeDestroy(chContainer) end if wmObject then safeDestroy(wmObject) end
     for _, c in pairs(State.Conn.Env) do if c then pcall(function() c:Disconnect() end) end end
+    for _, c in ipairs(State.Conn.Camera) do if c then pcall(function() c:Disconnect() end) end end
+    State.Conn.Env, State.Conn.Camera = {}, {}
+
     local rPart = Workspace:FindFirstChild("MyExecutorRainPart") if rPart then safeDestroy(rPart) end
     pcall(function() RunService:UnbindFromRenderStep("ExecutorRainLoop") end)
 
@@ -1504,7 +1529,7 @@ G.Tools:AddButton("Unload Script", function()
     getgenv().WhiteRoseLoaded = nil Library:Unload()
 end)
 
--- // Turbo Instant Respawn Engine with Clothing Watchdog \ --
+-- // Turbo Instant Respawn Engine with Leak-Free Lifecycle \ --
 local function instantSync(c)
     if not c or not c.Parent then return end
     pcall(function()
@@ -1520,6 +1545,9 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     local curGen = State.CharGen
 
     stopEmote()
+    AM:Clear(Player.Character)
+    cleanTableInstances(State.Orig.Clothing)
+
     State.Scripted = { Shirt = nil, Pants = nil, TShirt = nil, ScarySmile = nil, CustomAccs = {}, SkyObject = nil }
     State.Orig.Clothing, State.Orig.LimbColors, State.Orig.LimbData, State.Cache.Applied = { Shirt = nil, Pants = nil, TShirts = {}, Accessories = {}, Hair = {} }, {}, {}, {}
     State.Cache.TrackedLabels = setmetatable({}, { __mode = "k" })
@@ -1538,7 +1566,6 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
             end
         end)
 
-        -- Persistent Watchdog for late server avatar resets
         if State.Conn.Env["AppEnforce"] then State.Conn.Env["AppEnforce"]:Disconnect() end
         local enforcePending = false
         State.Conn.Env["AppEnforce"] = c.DescendantAdded:Connect(function(d)
@@ -1563,9 +1590,10 @@ if Player.Character and Player.Character:FindFirstChild("Humanoid") then
     end)
 end
 
--- // Self-Healing Background Watchdog (Ensures 100% Reliability) \ --
+-- // Leak-Free Self-Healing Background Watchdog \ --
 task.spawn(function()
-    while task.wait(1.5) do
+    while State.Running and task.wait(1.5) do
+        if not State.Running then break end
         local c = Player.Character
         if c and c.Parent and c:FindFirstChild("Humanoid") and c:FindFirstChild("Head") then
             syncChar(c)
@@ -1600,7 +1628,6 @@ if ThemeManager and SaveManager then
         end
     end
 
-    -- Run Autoload and apply immediately on script execution
     task.spawn(function()
         pcall(function() SaveManager:LoadAutoloadConfig() end)
         applyLoadedConfig()
