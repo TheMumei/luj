@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V8.9 - Persistent Clothing & Master Visuals Suite
-    (Fixed Missing Shirt Bug + Turbo Respawn + Fog-Sync RTX + Pink Sky + Universal NameTag + Dual R6/R15 Korblox)
+    WhiteRose V9.0 - AutoLoad Master Fixed Edition
+    (Fixed Auto-Load Config Loading + Deferred Batch Sync + Persistent Clothing + Fog-Sync RTX + Pink Sky)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -26,7 +26,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Persistent Clothing | v8.9", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & AutoLoad Fixed | v9.0", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -47,7 +47,7 @@ local CFG = {
 
 -- 30 Full Minecraft Materials
 local MC_MATERIALS = {
-    [Enum.Material.Asphalt] = { "11545435992" }, [Enum.Material.Basalt] = { "11545440462", "9730055481" }, [Enum.Material.Brick] = { "11545453130" },
+    [Enum.Material.Asphalt] = { "11545435992" }, [Enum.Material.Basalt] = { "11545440462", "9730055481" }, [Enum.Material.Brick] = { "115454353130" },
     [Enum.Material.Cobblestone] = { "11545460611" }, [Enum.Material.Concrete] = { "11545468983" }, [Enum.Material.CorrodedMetal] = { "11545476330" },
     [Enum.Material.CrackedLava] = { "11545484781" }, [Enum.Material.DiamondPlate] = { "11545495407" }, [Enum.Material.Fabric] = { "118776397" },
     [Enum.Material.Foil] = { "11545501473" }, [Enum.Material.Glacier] = { "11545521725" }, [Enum.Material.Granite] = { "11545524005" },
@@ -135,7 +135,7 @@ local function getEffect(cls, name)
     return e
 end
 
--- // Smart Accessory Manager \ --
+-- // Smart Accessory Manager with Safe Concurrent Workers \ --
 local AM = { Conn = {}, SyncToken = 0 }
 local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
 
@@ -447,8 +447,10 @@ local function playEmote(c, name)
     end)
 end
 
+-- // Unified Sync Function with Batching Debouncer \ --
 local function syncChar(c)
-    if not c then return end local active = { Auto = {} }
+    if not c or not c.Parent then return end
+    local active = { Auto = {} }
     for _, t in ipairs({"Shirt", "Pants", "TShirt"}) do CM:Apply(c, t, getOpt(t .. "Selector", "None")) end
     for name, act in pairs(allActions) do
         if getTog(name) then
@@ -459,6 +461,19 @@ local function syncChar(c)
     AM:Sync(c, active)
     for g in pairs(CFG.Limbs) do if Options[g .. "Color"] then applyColor(c, g, Options[g .. "Color"].Value) end end
     applyAnim(c, getOpt("AnimationPackSelector", "None"))
+end
+
+local syncPending = false
+local function requestCharSync(c)
+    if syncPending then return end
+    syncPending = true
+    task.defer(function()
+        syncPending = false
+        local targetChar = c or Player.Character
+        if targetChar and targetChar.Parent then
+            syncChar(targetChar)
+        end
+    end)
 end
 
 -- // High-Performance Cached Universal NameTag Engine \ --
@@ -508,12 +523,10 @@ local function updateUniversalNameTag()
     local plainFormatted = (tag ~= "" and (tag .. " ") or "") .. pDisplay
     local char = Player.Character
 
-    -- 1. Humanoid DisplayName
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum and hum.DisplayName ~= plainFormatted then hum.DisplayName = plainFormatted end
 
-        -- 2. Overhead BillboardGuis
         for _, d in ipairs(char:GetChildren()) do
             if d:IsA("BillboardGui") then
                 for _, lbl in ipairs(d:GetDescendants()) do
@@ -529,7 +542,6 @@ local function updateUniversalNameTag()
         end
     end
 
-    -- 3. Update Existing Cached Labels Fast
     for lbl in pairs(State.Cache.TrackedLabels) do
         if lbl and lbl.Parent then
             local orig = lbl:GetAttribute("WR_OrigText")
@@ -539,7 +551,6 @@ local function updateUniversalNameTag()
         end
     end
 
-    -- 4. Target Scan (CoreGui PlayerList & Custom Leaderboard Guis)
     pcall(function()
         local coreGui = game:GetService("CoreGui")
         local pList = coreGui:FindFirstChild("PlayerList") or coreGui:FindFirstChild("PlayerListMaster")
@@ -762,7 +773,9 @@ local catMap = { Accessories = G.Acc, Body = G.Body, Faces = G.Faces, Clothing =
 for name, data in pairs(allActions) do
     if catMap[data.category] then
         catMap[data.category]:AddToggle(name, { Text = name, Default = false, Callback = function(v)
-            State.Cache.Applied[name] = nil if not v and data.type == "Function" then pcall(data.action, Player.Character, false) end syncChar(Player.Character)
+            State.Cache.Applied[name] = nil
+            if not v and data.type == "Function" then pcall(data.action, Player.Character, false) end
+            requestCharSync(Player.Character)
         end })
     end
 end
@@ -1235,7 +1248,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
         if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
         if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
         if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
-        if Lighting.OutdoorAmbient ~= targetAmbient then Lighting.OutdoorAmbient = targetOutdoor end
+        if Lighting.OutdoorAmbient ~= targetOutdoor then Lighting.OutdoorAmbient = targetOutdoor end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
@@ -1444,7 +1457,7 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
                     enforcePending = true
                     task.defer(function()
                         enforcePending = false
-                        if c and c.Parent and State.CharGen == curGen then syncChar(c) end
+                        if c and c.Parent and State.CharGen == curGen then requestCharSync(c) end
                     end)
                 end
             end
@@ -1452,17 +1465,43 @@ State.Conn.CharacterAdded = Player.CharacterAdded:Connect(function(c)
     end)
 end)
 
+-- // Initial Character Startup Injection \ --
+if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+    task.spawn(function()
+        instantSync(Player.Character)
+    end)
+end
+
+-- // SaveManager & AutoLoad Integration with Batch Buffer \ --
 if ThemeManager and SaveManager then
     ThemeManager:SetLibrary(Library) SaveManager:SetLibrary(Library)
     SaveManager:IgnoreThemeSettings() SaveManager:SetIgnoreIndexes({"ToggleUIKeybind"})
     ThemeManager:SetFolder("WhiteRose_Settings") SaveManager:SetFolder("WhiteRose_Settings")
     ThemeManager:ApplyToTab(Tabs.Settings) SaveManager:BuildConfigSection(Tabs.Settings)
+
+    local function applyLoadedConfig()
+        task.wait(0.15)
+        local char = Player.Character or Player.CharacterAdded:Wait()
+        if char then
+            captureColors(char, true)
+            syncChar(char)
+            if getTog("NameTagEnabled") then updateUniversalNameTag() end
+        end
+    end
+
     local oldLoad = SaveManager.Load
     if oldLoad then
         function SaveManager:Load(...)
             resetAllUI() fullReset(Player.Character)
-            local ok, err = oldLoad(self, ...) if ok then task.wait(0.2) syncChar(Player.Character) end return ok, err
+            local ok, err = oldLoad(self, ...)
+            if ok then applyLoadedConfig() end
+            return ok, err
         end
     end
-    SaveManager:LoadAutoloadConfig()
+
+    -- Run Autoload and apply immediately on script execution
+    task.spawn(function()
+        pcall(function() SaveManager:LoadAutoloadConfig() end)
+        applyLoadedConfig()
+    end)
 end
