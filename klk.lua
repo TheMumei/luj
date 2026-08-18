@@ -1,6 +1,6 @@
 --[[ 
-    WhiteRose V9.0 - AutoLoad Master Fixed Edition
-    (Fixed Auto-Load Config Loading + Deferred Batch Sync + Persistent Clothing + Fog-Sync RTX + Pink Sky)
+    WhiteRose V9.1 - Self-Healing AutoLoad Master Edition
+    (Fixed AutoLoad Accessories + Physical Tag Verification + Robust Limb Mapping + Persistent Clothing + Fog-Sync RTX)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
@@ -26,7 +26,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & AutoLoad Fixed | v9.0", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Self-Healing | v9.1", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -47,7 +47,7 @@ local CFG = {
 
 -- 30 Full Minecraft Materials
 local MC_MATERIALS = {
-    [Enum.Material.Asphalt] = { "11545435992" }, [Enum.Material.Basalt] = { "11545440462", "9730055481" }, [Enum.Material.Brick] = { "115454353130" },
+    [Enum.Material.Asphalt] = { "11545435992" }, [Enum.Material.Basalt] = { "11545440462", "9730055481" }, [Enum.Material.Brick] = { "11545453130" },
     [Enum.Material.Cobblestone] = { "11545460611" }, [Enum.Material.Concrete] = { "11545468983" }, [Enum.Material.CorrodedMetal] = { "11545476330" },
     [Enum.Material.CrackedLava] = { "11545484781" }, [Enum.Material.DiamondPlate] = { "11545495407" }, [Enum.Material.Fabric] = { "118776397" },
     [Enum.Material.Foil] = { "11545501473" }, [Enum.Material.Glacier] = { "11545521725" }, [Enum.Material.Granite] = { "11545524005" },
@@ -135,11 +135,43 @@ local function getEffect(cls, name)
     return e
 end
 
--- // Smart Accessory Manager with Safe Concurrent Workers \ --
-local AM = { Conn = {}, SyncToken = 0 }
-local ATT_CF = { HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0), FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), NeckAttachment = CFrame.new(0, 1, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0), WaistAttachment = CFrame.new(0, -0.8, 0) }
+-- // Smart Self-Healing Accessory Manager \ --
+local AM = { Conn = {} }
+local ATT_CF = {
+    HairAttachment = CFrame.new(0, 0.6, 0), HatAttachment = CFrame.new(0, 0.6, 0),
+    FaceFrontAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0), FaceCenterAttachment = CFrame.new(0, 0, -0.6)*CFrame.Angles(0, 1.57, 0),
+    NeckAttachment = CFrame.new(0, 0.8, 0), LeftShoulderAttachment = CFrame.new(-1, 0.8, 0), RightShoulderAttachment = CFrame.new(1, 0.8, 0),
+    WaistAttachment = CFrame.new(0, -0.8, 0), WaistBackAttachment = CFrame.new(0, -0.8, 0.5), BodyBackAttachment = CFrame.new(0, 0, 0.5)
+}
 
-local function makeCosmetic(r) for _, d in ipairs(r:GetDescendants()) do if d:IsA("BasePart") then d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.Massless = false, false, false, false, true end end end
+local LIMB_MAP_R15 = {
+    HairAttachment = "Head", HatAttachment = "Head", FaceFrontAttachment = "Head", FaceCenterAttachment = "Head",
+    NeckAttachment = "UpperTorso", BodyBackAttachment = "UpperTorso", ChestFrontAttachment = "UpperTorso",
+    WaistBackAttachment = "LowerTorso", WaistAttachment = "LowerTorso", WaistCenterAttachment = "LowerTorso",
+    LeftShoulderAttachment = "LeftUpperArm", RightShoulderAttachment = "RightUpperArm",
+    LeftFootAttachment = "LeftFoot", RightFootAttachment = "RightFoot"
+}
+
+local LIMB_MAP_R6 = {
+    HairAttachment = "Head", HatAttachment = "Head", FaceFrontAttachment = "Head", FaceCenterAttachment = "Head",
+    NeckAttachment = "Torso", BodyBackAttachment = "Torso", ChestFrontAttachment = "Torso",
+    WaistBackAttachment = "Torso", WaistAttachment = "Torso", WaistCenterAttachment = "Torso",
+    LeftShoulderAttachment = "Left Arm", RightShoulderAttachment = "Right Arm",
+    LeftFootAttachment = "Left Leg", RightFootAttachment = "Right Leg"
+}
+
+local function getAttachmentParent(char, attName)
+    local is_r6 = isR6(char)
+    local map = is_r6 and LIMB_MAP_R6 or LIMB_MAP_R15
+    local targetLimbName = map[attName] or (is_r6 and "Torso" or "UpperTorso")
+    return char:FindFirstChild(targetLimbName) or char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+end
+
+local function makeCosmetic(r)
+    for _, d in ipairs(r:GetDescendants()) do
+        if d:IsA("BasePart") then d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.Massless = false, false, false, false, true end
+    end
+end
 
 local function computeAutoHairOffset(head, parts, baseCFrame)
     local inv = baseCFrame:Inverse()
@@ -192,26 +224,43 @@ function AM:Bind(tp, c)
     sync()
 end
 
-local function weldAcc(char, acc)
+local function weldAcc(char, acc, accId)
     local h = acc:FindFirstChild("Handle") if not h or not h:IsA("BasePart") then return false end
     makeCosmetic(acc)
-    local hAtt = h:FindFirstChildWhichIsA("Attachment") or Instance.new("Attachment", h)
+    acc:SetAttribute("WR_Acc", true)
+    if accId then acc:SetAttribute("WR_AccId", tostring(accId)) end
+
+    local hAtt = h:FindFirstChildWhichIsA("Attachment")
+    local attName = hAtt and hAtt.Name or "HatAttachment"
+
     local cAtt
-    for _, d in ipairs(char:GetDescendants()) do if d:IsA("Attachment") and d.Name == hAtt.Name and d.Parent:IsA("BasePart") then cAtt = d break end end
-    if not cAtt then
-        local head = char:FindFirstChild("Head") if not head then return false end
-        cAtt = head:FindFirstChild(hAtt.Name .. "_WRF") or Instance.new("Attachment", head)
-        cAtt.Name, cAtt.CFrame = hAtt.Name .. "_WRF", ATT_CF[hAtt.Name] or CFrame.new(0, 0.6, 0)
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("Attachment") and d.Name == attName and d.Parent:IsA("BasePart") then
+            cAtt = d
+            break
+        end
     end
+
+    if not cAtt then
+        local tp = getAttachmentParent(char, attName)
+        if not tp then return false end
+        cAtt = tp:FindFirstChild(attName .. "_WRF") or Instance.new("Attachment", tp)
+        cAtt.Name = attName .. "_WRF"
+        cAtt.CFrame = ATT_CF[attName] or CFrame.new(0, 0.6, 0)
+    end
+
     local tp = cAtt.Parent
-    acc.Parent, h.CFrame = char, tp.CFrame * cAtt.CFrame * hAtt.CFrame:Inverse()
-    local w = Instance.new("Weld", tp) w.Name, w.Part0, w.Part1, w.C0, w.C1 = "WRA_Weld", tp, h, cAtt.CFrame, hAtt.CFrame
-    local wr = Instance.new("ObjectValue", acc) wr.Name, wr.Value = "WRA_Weld", w
+    acc.Parent = char
+    h.CFrame = tp.CFrame * cAtt.CFrame * (hAtt and hAtt.CFrame:Inverse() or CFrame.identity)
+    local w = Instance.new("Weld", tp)
+    w.Name, w.Part0, w.Part1, w.C0, w.C1 = "WRA_Weld", tp, h, cAtt.CFrame, (hAtt and hAtt.CFrame or CFrame.identity)
+    local wr = Instance.new("ObjectValue", acc)
+    wr.Name, wr.Value = "WRA_Weld", w
     AM:Bind(tp, acc)
     return true
 end
 
-local function attachHair(char, root)
+local function attachHair(char, root, accId)
     local head = char:FindFirstChild("Head") if not head then return false end
     local parts = root:IsA("BasePart") and { root } or {}
     if #parts == 0 then for _, d in ipairs(root:GetDescendants()) do if d:IsA("BasePart") then table_insert(parts, d) end end end
@@ -220,7 +269,11 @@ local function attachHair(char, root)
     local attP, att
     for _, p in ipairs(parts) do local a = p:FindFirstChildWhichIsA("Attachment") if a then attP, att = p, a break end end
     local c0 = att and ((head:FindFirstChild(att.Name) or Instance.new("Attachment", head)).CFrame * att.CFrame:Inverse() * (bCF:Inverse() * attP.CFrame):Inverse()) or computeAutoHairOffset(head, parts, bCF)
-    local hldr = Instance.new("Folder", char) hldr.Name = "WR_Hair" hldr:SetAttribute("WR_Hair", true)
+    local hldr = Instance.new("Folder", char)
+    hldr.Name = "WR_Hair"
+    hldr:SetAttribute("WR_Hair", true)
+    if accId then hldr:SetAttribute("WR_AccId", tostring(accId)) end
+
     for _, p in ipairs(parts) do
         local rel = bCF:Inverse() * p.CFrame
         p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery, p.Massless, p.Parent = false, false, false, false, true, hldr
@@ -245,47 +298,86 @@ function AM:Clear(char)
     State.Scripted.CustomAccs = {}
 end
 
+-- // Self-Healing Robust Sync \\ --
 function AM:Sync(char, groups)
-    self.SyncToken = self.SyncToken + 1
-    local curToken = self.SyncToken
-    local ids = {} for _, g in pairs(groups) do for _, id in ipairs(g) do table_insert(ids, tostring(id)) end end table.sort(ids)
-    local sig = table.concat(ids, ",")
-    if State.Cache.Char == char and State.Cache.Sig == sig then return end
-    State.Cache.Char, State.Cache.Sig = char, sig
-    self:Clear(char)
-
-    for _, id in ipairs(ids) do
-        local cached = State.Cache.AccTmpl[id]
-        if cached then
-            local cl = cached:Clone()
-            local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
-            if acc then
-                acc:SetAttribute("WR_Acc", true)
-                if not weldAcc(char, acc) then safeDestroy(cl) end
-            elseif not attachHair(char, cl) then
-                safeDestroy(cl)
+    if not char or not char.Parent then return end
+    local targetIds = {}
+    local idSet = {}
+    for _, g in pairs(groups) do
+        for _, id in ipairs(g) do
+            local sId = tostring(id)
+            if not idSet[sId] then
+                idSet[sId] = true
+                table_insert(targetIds, sId)
             end
-        else
-            task.spawn(function()
-                for _ = 1, 6 do
-                    if not char or not char.Parent or State.Cache.Sig ~= sig or self.SyncToken ~= curToken then return end
-                    local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. id)
-                    local a = ok and o and o[1]
-                    if a then
-                        State.Cache.AccTmpl[id] = a
-                        local cl = a:Clone()
-                        local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
-                        if acc then
-                            acc:SetAttribute("WR_Acc", true)
-                            if weldAcc(char, acc) then break end
-                        elseif attachHair(char, cl) then
-                            break
-                        end
-                        safeDestroy(cl)
-                    end
-                    task.wait(0.2)
+        end
+    end
+
+    -- 1. Remove accessories that shouldn't be here
+    for _, c in ipairs(char:GetChildren()) do
+        local aId = c:GetAttribute("WR_AccId")
+        if (c:IsA("Accessory") and c:GetAttribute("WR_Acc")) or c:GetAttribute("WR_Hair") then
+            if not aId or not idSet[aId] then
+                local w = c:FindFirstChild("WRA_Weld")
+                if w and w:IsA("ObjectValue") then safeDestroy(w.Value) end
+                safeDestroy(c)
+            end
+        end
+    end
+
+    -- 2. Find currently present IDs
+    local presentIds = {}
+    for _, c in ipairs(char:GetChildren()) do
+        local aId = c:GetAttribute("WR_AccId")
+        if aId then presentIds[aId] = true end
+    end
+
+    -- 3. Attach missing items
+    for _, sId in ipairs(targetIds) do
+        if not presentIds[sId] then
+            local cached = State.Cache.AccTmpl[sId]
+            if cached then
+                local cl = cached:Clone()
+                local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
+                if acc then
+                    if not weldAcc(char, acc, sId) then safeDestroy(cl) end
+                elseif not attachHair(char, cl, sId) then
+                    safeDestroy(cl)
                 end
-            end)
+            else
+                task.spawn(function()
+                    for _ = 1, 8 do
+                        if not char or not char.Parent then return end
+                        -- Verify user still has this active
+                        local isStillActive = false
+                        for name, act in pairs(allActions) do
+                            if getTog(name) and act.type == "Accessory" then
+                                for _, list in pairs(act.action) do
+                                    for _, id in ipairs(list) do
+                                        if tostring(id) == sId then isStillActive = true break end
+                                    end
+                                end
+                            end
+                        end
+                        if not isStillActive then return end
+
+                        local ok, o = pcall(game.GetObjects, game, "rbxassetid://" .. sId)
+                        local a = ok and o and o[1]
+                        if a then
+                            State.Cache.AccTmpl[sId] = a
+                            local cl = a:Clone()
+                            local acc = cl:IsA("Accessory") and cl or cl:FindFirstChildWhichIsA("Accessory", true)
+                            if acc then
+                                if weldAcc(char, acc, sId) then break end
+                            elseif attachHair(char, cl, sId) then
+                                break
+                            end
+                            safeDestroy(cl)
+                        end
+                        task.wait(0.3)
+                    end
+                end)
+            end
         end
     end
 end
@@ -315,7 +407,7 @@ local function applyFace(c)
     face.Texture = getTog("Epic Face") and CFG.IDs.FaceTexture or (State.Orig.FaceTex or "")
 end
 
--- // Persistent Clothing Engine with Auto-Watchdog \ --
+-- // Persistent Clothing Engine \ --
 local CM = { Hidden = {}, Types = { Shirt = { c = "Shirt", p = "ShirtTemplate" }, Pants = { c = "Pants", p = "PantsTemplate" }, TShirt = { c = "ShirtGraphic", p = "Graphic" } } }
 
 local function restoreClothing(char, typeStr)
@@ -810,8 +902,8 @@ G.Custom:AddButton("Load Asset 🚀", function()
                 if acc then
                     acc:SetAttribute("WR_Acc", true)
                     acc:SetAttribute("WR_Custom", true)
-                    if weldAcc(char, acc) then table_insert(State.Scripted.CustomAccs, acc) end
-                elseif attachHair(char, clone) then
+                    if weldAcc(char, acc, cleanId) then table_insert(State.Scripted.CustomAccs, acc) end
+                elseif attachHair(char, clone, cleanId) then
                     clone:SetAttribute("WR_Custom", true)
                     table_insert(State.Scripted.CustomAccs, clone)
                 end
@@ -1248,7 +1340,7 @@ G.TitanEnv:AddButton("Enforce Universal Sky 🌌", function()
         if Lighting.ClockTime ~= 14 then Lighting.ClockTime = 14 end
         if Lighting.Brightness ~= 2.0 then Lighting.Brightness = 2.0 end
         if Lighting.Ambient ~= targetAmbient then Lighting.Ambient = targetAmbient end
-        if Lighting.OutdoorAmbient ~= targetOutdoor then Lighting.OutdoorAmbient = targetOutdoor end
+        if Lighting.OutdoorAmbient ~= targetAmbient then Lighting.OutdoorAmbient = targetOutdoor end
     end
 
     for _, d in ipairs(Lighting:GetChildren()) do
@@ -1417,7 +1509,6 @@ local function instantSync(c)
     if not c or not c.Parent then return end
     pcall(function()
         stopEmote()
-        AM:Clear(c)
         captureColors(c, true)
         syncChar(c)
         if getTog("NameTagEnabled") then updateUniversalNameTag() end
@@ -1472,6 +1563,16 @@ if Player.Character and Player.Character:FindFirstChild("Humanoid") then
     end)
 end
 
+-- // Self-Healing Background Watchdog (Ensures 100% Reliability) \ --
+task.spawn(function()
+    while task.wait(1.5) do
+        local c = Player.Character
+        if c and c.Parent and c:FindFirstChild("Humanoid") and c:FindFirstChild("Head") then
+            syncChar(c)
+        end
+    end
+end)
+
 -- // SaveManager & AutoLoad Integration with Batch Buffer \ --
 if ThemeManager and SaveManager then
     ThemeManager:SetLibrary(Library) SaveManager:SetLibrary(Library)
@@ -1480,7 +1581,7 @@ if ThemeManager and SaveManager then
     ThemeManager:ApplyToTab(Tabs.Settings) SaveManager:BuildConfigSection(Tabs.Settings)
 
     local function applyLoadedConfig()
-        task.wait(0.15)
+        task.wait(0.2)
         local char = Player.Character or Player.CharacterAdded:Wait()
         if char then
             captureColors(char, true)
