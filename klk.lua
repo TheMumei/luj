@@ -1,16 +1,27 @@
 --[[ 
-    WhiteRose V9.3 - Master Bug-Free Edition
-    (Fixed Universal Sky Crash + Fixed Brick ID + Fixed Korblox Reset + Zero Memory Leaks + Turbo Respawn + Fog-Sync RTX)
+    WhiteRose V10.0 - SirHurt V5 & UNC Standard Edition
+    (cloneref Anti-Detection + gethui Hidden UI + Physical Tag Self-Healing + Persistent Clothing + Fog-Sync RTX + Dual Korblox)
 ]]
 if getgenv().WhiteRoseLoaded then return end
 
-local Players = game:GetService("Players")
-local Lighting = game:GetService("Lighting")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
+-- // SirHurt V5 / UNC API Wrappers \ --
+local cloneref = cloneref or (cache and cache.cloneref) or function(obj) return obj end
+local gethui = gethui or function() return cloneref(game:GetService("CoreGui")) end
+local sethidden = sethiddenproperty or set_hidden_property or set_hidden_prop or function(...) end
+local gethidden = gethiddenproperty or get_hidden_property or get_hidden_prop or function(...) end
+local setscriptable = setscriptable or set_scriptable or function(...) end
+local execName = (identifyexecutor and identifyexecutor()) or "SirHurt V5 / UNC"
+
+-- // Service Isolation via cloneref \ --
+local Players = cloneref(game:GetService("Players"))
+local Lighting = cloneref(game:GetService("Lighting"))
+local RunService = cloneref(game:GetService("RunService"))
+local TweenService = cloneref(game:GetService("TweenService"))
+local Workspace = cloneref(game:GetService("Workspace"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local GuiService = cloneref(game:GetService("GuiService"))
+local MaterialService = cloneref(game:GetService("MaterialService"))
+local CoreGui = cloneref(game:GetService("CoreGui"))
 
 -- // Fast Lua Math & String Upvalues \ --
 local math_sin, math_cos, math_rad, math_round, math_min, math_max = math.sin, math.cos, math.rad, math.round, math.min, math.max
@@ -26,7 +37,7 @@ local ThemeManager, SaveManager = fetch("addons/ThemeManager.lua"), fetch("addon
 getgenv().WhiteRoseLoaded = true
 local Player, Toggles, Options = Players.LocalPlayer, Library.Toggles, Library.Options
 
-local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose & Bug-Free | v9.3", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
+local Window = Library:CreateWindow({ Name = "WhiteRose", Title = "WhiteRose", SubTitle = "Crosshair & Visuals Suite", Draggable = true, Footer = "WhiteRose | v10.0 [" .. execName .. "]", Center = true, AutoShow = true, Resizable = true, EnableSidebarResize = true })
 
 -- // Configuration Data \ --
 local CFG = {
@@ -89,7 +100,7 @@ local function cleanTableInstances(tbl)
     end
 end
 
--- // Dynamic Inset Caching for Crosshair with Clean Listeners \ --
+-- // Dynamic Inset Caching with Clean Listeners \ --
 local cachedGuiInset = GuiService:GetGuiInset()
 local function refreshGuiInset() cachedGuiInset = GuiService:GetGuiInset() end
 
@@ -662,8 +673,7 @@ local function updateUniversalNameTag()
     end
 
     pcall(function()
-        local coreGui = game:GetService("CoreGui")
-        local pList = coreGui:FindFirstChild("PlayerList") or coreGui:FindFirstChild("PlayerListMaster")
+        local pList = CoreGui:FindFirstChild("PlayerList") or CoreGui:FindFirstChild("PlayerListMaster")
         if pList then
             for _, lbl in ipairs(pList:GetDescendants()) do
                 if lbl:IsA("TextLabel") and not State.Cache.TrackedLabels[lbl] then
@@ -715,7 +725,6 @@ local function fullReset(c)
         end
         applyFace(c)
 
-        -- Fully reset Korblox in R6 & R15
         pcall(function()
             local rLeg = c:FindFirstChild("Right Leg")
             if rLeg then
@@ -1043,8 +1052,9 @@ G.WM_Pos:AddSlider("WatermarkOffsetY", { Text = "Offset Y", Default = 30, Min = 
 G.WM_Out:AddToggle("WatermarkOutlineEnable", { Text = "Enable Outline", Default = true })
 G.WM_Out:AddLabel("Outline Color"):AddColorPicker("WatermarkOutlineColor", { Default = Color3.new(0, 0, 0) })
 
--- // High-Precision Cached Crosshair & Watermark Elements \ --
-local ScreenGui = Library.ScreenGui or game:GetService("CoreGui"):FindFirstChild("Obsidian") or Instance.new("ScreenGui", game:GetService("CoreGui"))
+-- // Stealth gethui Container for Crosshair & Watermark \ --
+local hiddenGuiParent = gethui()
+local ScreenGui = Library.ScreenGui or hiddenGuiParent:FindFirstChild("Obsidian") or Instance.new("ScreenGui", hiddenGuiParent)
 local chContainer = Instance.new("Frame", ScreenGui)
 chContainer.Name, chContainer.BackgroundTransparency, chContainer.Size = "CHContainer", 1, UDim2.new(1, 0, 1, 0)
 
@@ -1227,7 +1237,7 @@ end })
 -- // Complete & Filtered Minecraft Textures Engine \ --
 G.TitanEnv:AddButton("Apply MineCraft Textures", function()
     task.spawn(function()
-        local MS = game:GetService("MaterialService")
+        local MS = MaterialService
         for _, c in ipairs(MS:GetChildren()) do
             if c:IsA("MaterialVariant") and string_sub(c.Name, 1, 4) == "abs_" then
                 pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
@@ -1531,7 +1541,7 @@ G.Tools:AddButton("Unload Script", function()
     local rPart = Workspace:FindFirstChild("MyExecutorRainPart") if rPart then safeDestroy(rPart) end
     pcall(function() RunService:UnbindFromRenderStep("ExecutorRainLoop") end)
 
-    local MS = game:GetService("MaterialService")
+    local MS = MaterialService
     for _, c in ipairs(MS:GetChildren()) do
         if c:IsA("MaterialVariant") and string_sub(c.Name, 1, 4) == "abs_" then
             pcall(function() MS:SetBaseMaterialOverride(c.BaseMaterial, "") end)
